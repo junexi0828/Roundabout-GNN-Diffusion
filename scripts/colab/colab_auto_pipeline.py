@@ -879,26 +879,23 @@ class ColabAutoPipeline:
                 lambda: self.train_model(processed_dir),
             )
             if not success:
-        if self.mode != "ultra_fast":
-            try:
-                self.step(9, 10, "베이스라인 비교 평가", self.compare_baselines)
-            except Exception as e:
-                print(f"⚠️  비교 평가 실패: {e}")
-        # ========================================================================
-
-        # 시각화
-        step_num = 10 if self.mode != "ultra_fast" else 7
-        try:
-            self.step(step_num, step_num, "결과 시각화", self.visualize_results)
+                print("⚠️  MID 학습 실패")
+                return False
         except Exception as e:
-            print(f"⚠️  시각화 실패: {e}")
+            print(f"MID 모델 학습 실패: {e}")
+            return False
 
-        # 결과 저장
-        step_num += 1
+        # 7. 결과 시각화
         try:
-            self.step(step_num, step_num, "결과 저장", self.save_results)
+            self.step(7, 8, "결과 시각화", self.visualize_results)
         except Exception as e:
-            print(f"⚠️  결과 저장 실패: {e}")
+            print(f"시각화 실패: {e}")
+
+        # 8. 결과 저장
+        try:
+            self.step(8, 8, "결과 저장 (Drive)", self.save_results)
+        except Exception as e:
+            print(f"결과 저장 실패: {e}")
 
         print("\n" + "=" * 80)
         print("✓ 전체 파이프라인 완료!")
