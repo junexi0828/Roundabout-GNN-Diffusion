@@ -173,7 +173,7 @@ class MIDTrainer:
                         if hasattr(self.model, 'mid'):
                             x_t = self.model.mid.q_sample(future_data, t, noise)
                         else:
-                        x_t = self.model.q_sample(future_data, t, noise)
+                            x_t = self.model.q_sample(future_data, t, noise)
 
                         # 노이즈 예측
                         # 모델이 GNN을 사용하는지 확인
