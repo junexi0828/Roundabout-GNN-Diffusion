@@ -93,7 +93,9 @@ class MIDTrainer:
         # Mixed Precision Training
         self.use_amp = config.get('use_amp', False)
         if self.use_amp:
-            self.scaler = torch.cuda.amp.GradScaler()
+            # MPS 호환 GradScaler
+            device_type = 'cuda' if 'cuda' in str(self.device) else 'cpu'
+            self.scaler = torch.amp.GradScaler(device_type)
 
         # TensorBoard
         log_dir = config.get('log_dir', 'runs/mid')
@@ -150,17 +152,27 @@ class MIDTrainer:
 
             # Forward pass (Mixed Precision)
             if self.use_amp:
-                with torch.amp.autocast('cuda'):
+                device_type = 'cuda' if 'cuda' in str(self.device) else 'cpu'
+                with torch.amp.autocast(device_type):
                     if future_data is not None:
                         # 타임스텝 랜덤 샘플링
                         batch_size = future_data.size(0)
+                        # HybridGNNMID는 내부에 mid 모델을 가지고 있음
+                        if hasattr(self.model, 'mid'):
+                            num_steps = self.model.mid.num_diffusion_steps
+                        else:
+                            num_steps = self.model.num_diffusion_steps
                         t = torch.randint(
-                            0, self.model.num_diffusion_steps,
+                            0, num_steps,
                             (batch_size,), device=self.device
                         )
 
                         # Forward diffusion (노이즈 추가)
                         noise = torch.randn_like(future_data)
+                        # HybridGNNMID는 내부에 mid 모델을 가지고 있음
+                        if hasattr(self.model, 'mid'):
+                            x_t = self.model.mid.q_sample(future_data, t, noise)
+                        else:
                         x_t = self.model.q_sample(future_data, t, noise)
 
                         # 노이즈 예측
@@ -203,23 +215,28 @@ class MIDTrainer:
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
             else:
+                # Mixed Precision 미사용
                 if future_data is not None:
                     # 타임스텝 랜덤 샘플링
                     batch_size = future_data.size(0)
+                    num_steps = self.config.get('num_diffusion_steps', 100)
                     t = torch.randint(
-                        0, self.model.num_diffusion_steps,
+                        0, num_steps,
                         (batch_size,), device=self.device
                     )
 
-                    # Forward diffusion
+                    # Forward diffusion (노이즈 추가)
                     noise = torch.randn_like(future_data)
+                    # HybridGNNMID는 내부에 mid 모델을 가지고 있음
+                    if hasattr(self.model, 'mid'):
+                        x_t = self.model.mid.q_sample(future_data, t, noise)
+                    else:
                     x_t = self.model.q_sample(future_data, t, noise)
 
-                    # 노이즈 예측
+                    # 노이즈 예측 (GNN 사용 여부에 따라 분기)
                     if hasattr(self.model, 'use_gnn') and self.model.use_gnn:
                         pred_noise = self.model(
                             graph_data=graph_data,
-                            hetero_data=hetero_graph if 'hetero_graph' in locals() else None,
                             obs_trajectory=obs_data,
                             future_trajectory=None,
                             t=t,
@@ -232,10 +249,10 @@ class MIDTrainer:
                             t=t,
                             x_t=x_t
                         )
-
                     # Loss 계산
                     loss = self.criterion(pred_noise, noise)
                 else:
+                    # 더미 forward (실제로는 future_data 필요)
                     if hasattr(self.model, 'use_gnn') and self.model.use_gnn:
                         pred_noise = self.model(
                             graph_data=graph_data,
@@ -308,13 +325,22 @@ class MIDTrainer:
                 if future_data is not None:
                     # 타임스텝 랜덤 샘플링
                     batch_size = future_data.size(0)
+                    # HybridGNNMID는 내부에 mid 모델을 가지고 있음
+                    if hasattr(self.model, 'mid'):
+                        num_steps = self.model.mid.num_diffusion_steps
+                    else:
+                        num_steps = self.model.num_diffusion_steps
                     t = torch.randint(
-                        0, self.model.num_diffusion_steps,
+                        0, num_steps,
                         (batch_size,), device=self.device
                     )
 
                     # Forward diffusion
                     noise = torch.randn_like(future_data)
+                    # HybridGNNMID는 내부에 mid 모델을 가지고 있음
+                    if hasattr(self.model, 'mid'):
+                        x_t = self.model.mid.q_sample(future_data, t, noise)
+                    else:
                     x_t = self.model.q_sample(future_data, t, noise)
 
                     # 노이즈 예측
@@ -331,12 +357,21 @@ class MIDTrainer:
 
                 # 샘플링 (평가용)
                 if future_data is not None:
+                    # HybridGNNMID는 graph_data를 받지만, MIDModel은 받지 않음
+                    if hasattr(self.model, 'use_gnn') and self.model.use_gnn and graph_data is not None:
                     samples = self.model.sample(
                         graph_data=graph_data,
                         obs_trajectory=obs_data,
                         num_samples=20,
                         ddim_steps=2
                     )
+                    else:
+                        # MIDModel (graph_data 없이)
+                        samples = self.model.sample(
+                            obs_trajectory=obs_data,
+                            num_samples=20,
+                            ddim_steps=2
+                        )
                     # 최소 ADE 샘플 선택
                     best_samples = samples[0]  # 첫 번째 샘플 사용 (실제로는 최소 ADE)
                     all_predictions.append(best_samples.cpu().numpy())
