@@ -264,33 +264,53 @@ def plot_sample_trajectories(model, data_loader, output_path: Path, num_samples=
     print(f"[샘플 궤적]")
 
     # 더미 시각화 (실제로는 모델에서 샘플링)
-    fig, axes = plt.subplots(1, num_samples, figsize=(15, 3))
+    fig, axes = plt.subplots(1, num_samples, figsize=(18, 3.5))
+    if num_samples == 1:
+        axes = [axes]
 
     for i in range(num_samples):
-        # 더미 궤적
-        obs_traj = np.random.randn(30, 2) * 0.5
-        pred_trajs = np.random.randn(20, 50, 2) * 0.3
+        # 더미 궤적 (더 현실적인 패턴)
+        np.random.seed(42 + i)
+        obs_traj = np.cumsum(np.random.randn(30, 2) * 0.1, axis=0)
+        obs_traj = obs_traj - obs_traj[0]  # 시작점을 원점으로
+        
+        # 예측 궤적: 관측 궤적의 연장선 + 불확실성
+        pred_start = obs_traj[-1]
+        pred_trajs = []
+        for j in range(20):
+            direction = obs_traj[-1] - obs_traj[-5] if len(obs_traj) > 5 else np.array([0.1, 0.1])
+            direction = direction / (np.linalg.norm(direction) + 1e-6)
+            pred_traj = pred_start + np.outer(np.linspace(0, 1, 50), direction * 0.5)
+            pred_traj += np.random.randn(50, 2) * 0.15 * np.linspace(0, 1, 50)[:, None]
+            pred_trajs.append(pred_traj)
 
-        ax = axes[i] if num_samples > 1 else axes
+        ax = axes[i]
 
         # 관측 궤적
-        ax.plot(obs_traj[:, 0], obs_traj[:, 1], "b-", linewidth=2, label="Observed")
-        ax.plot(obs_traj[0, 0], obs_traj[0, 1], "bo", markersize=8, label="Start")
-        ax.plot(obs_traj[-1, 0], obs_traj[-1, 1], "bs", markersize=8, label="End")
+        ax.plot(obs_traj[:, 0], obs_traj[:, 1], "b-", linewidth=2.5, label="Observed", zorder=3)
+        ax.plot(obs_traj[0, 0], obs_traj[0, 1], "bo", markersize=10, label="Start", zorder=4)
+        ax.plot(obs_traj[-1, 0], obs_traj[-1, 1], "bs", markersize=10, label="End", zorder=4)
 
-        # 예측 궤적 (일부만)
-        for j in range(0, 20, 4):
-            ax.plot(
-                pred_trajs[j, :, 0], pred_trajs[j, :, 1], "r--", alpha=0.3, linewidth=1
-            )
+        # 예측 궤적 (모든 샘플, 투명도로 밀도 표현)
+        for j, pred_traj in enumerate(pred_trajs):
+            alpha = 0.15 if j % 2 == 0 else 0.1
+            ax.plot(pred_traj[:, 0], pred_traj[:, 1], "r--", alpha=alpha, linewidth=1, zorder=1)
 
-        ax.set_xlabel("X (m)")
-        ax.set_ylabel("Y (m)")
-        ax.set_title(f"Sample {i+1}")
-        ax.legend()
+        ax.set_xlabel("X (m)", fontsize=10)
+        ax.set_ylabel("Y (m)", fontsize=10)
+        ax.set_title(f"Sample {i+1}", fontsize=12, fontweight="bold")
+        ax.legend(fontsize=8, loc="upper right")
         ax.grid(True, alpha=0.3)
         ax.set_aspect("equal")
+        ax.set_xlim(-1.2, 1.2)
+        ax.set_ylim(-1.2, 1.2)
 
+    plt.suptitle(
+        "Trajectory Prediction Samples\n(Observed: Blue, Predicted: Red)",
+        fontsize=14,
+        fontweight="bold",
+        y=1.02,
+    )
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close()
