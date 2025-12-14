@@ -194,11 +194,13 @@ class ColabAutoPipeline:
                 ],
                 check=False,
                 capture_output=True,
+                text=True,
             )
             if result.returncode != 0:
                 print("  ⚠️  최신 버전 설치 실패, 호환 버전 시도 중...")
+                print(f"  오류: {result.stderr[:200] if result.stderr else '알 수 없는 오류'}")
                 # 호환 가능한 버전 시도 (0.54.0은 대부분의 torch-geometric과 호환)
-                subprocess.run(
+                result2 = subprocess.run(
                     [
                         sys.executable,
                         "-m",
@@ -207,9 +209,18 @@ class ColabAutoPipeline:
                         "-q",
                         "torch-geometric-temporal==0.54.0",
                     ],
-                    check=True,
+                    check=False,
+                    capture_output=True,
+                    text=True,
                 )
-            print("  ✓ torch-geometric-temporal 설치 완료")
+                if result2.returncode != 0:
+                    print("  ⚠️  호환 버전(0.54.0) 설치도 실패")
+                    print(f"  오류: {result2.stderr[:200] if result2.stderr else '알 수 없는 오류'}")
+                    print("  ⚠️  torch-geometric-temporal 설치 실패, A3TGCN 학습은 건너뜁니다")
+                else:
+                    print("  ✓ torch-geometric-temporal (0.54.0) 설치 완료")
+            else:
+                print("  ✓ torch-geometric-temporal 설치 완료")
 
         print("✓ 라이브러리 설치 완료")
 
