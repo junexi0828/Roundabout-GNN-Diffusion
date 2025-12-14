@@ -152,39 +152,63 @@ class LocalAutoPipeline:
         return None
 
     def preprocess_data(self, data_path: str):
-        """3. 데이터 전처리"""
+        """3. 데이터 전처리 (CSV → 윈도우 생성)"""
         print("\n[데이터 전처리]")
 
         data_path_obj = Path(data_path)
+        processed_dir = self.project_root / "data" / "processed"
 
-        # 이미 전처리된 데이터가 있는지 확인
-        if "converted" in str(data_path_obj):
-            print(f"✓ 이미 전처리된 데이터 사용: {data_path_obj}")
-            return data_path
+        # 윈도우 pkl 파일이 이미 있는지 확인
+        windows_file = processed_dir / "sdd_windows.pkl"
+        if windows_file.exists():
+            print(f"✓ 윈도우 파일 이미 존재: {windows_file}")
+            return str(processed_dir)
 
-        # 전처리 실행
-        converted_dir = self.data_dir / "sdd" / "converted"
-        if converted_dir.exists() and list(converted_dir.glob("*.csv")):
-            print(f"✓ 전처리된 데이터 이미 존재: {converted_dir}")
-            return str(converted_dir)
+        # CSV가 아닌 경우 (원본 데이터) - CSV로 변환
+        if "converted" not in str(data_path_obj):
+            converted_dir = self.data_dir / "sdd" / "converted"
+            if not converted_dir.exists() or not list(converted_dir.glob("*.csv")):
+                print("CSV 변환 중...")
+                try:
+                    from src.data_processing.sdd_adapter import SDDAdapter
 
-        print("데이터 전처리 중...")
-        try:
-            from src.data_processing.sdd_adapter import SDDAdapter
+                    adapter = SDDAdapter(data_path_obj)
+                    converted_dir.mkdir(parents=True, exist_ok=True)
+                    adapter.convert_all_videos(converted_dir)
+                    print(f"✓ CSV 변환 완료")
+                except Exception as e:
+                    print(f"❌ CSV 변환 실패: {e}")
+                    return None
+            data_path_obj = converted_dir
 
-            adapter = SDDAdapter(data_path_obj)
-            converted_dir.mkdir(parents=True, exist_ok=True)
-            adapter.convert_all_videos(converted_dir)
+        # CSV → 윈도우 pkl 변환
+        print(f"\n[윈도우 생성] {data_path_obj} → {windows_file}")
 
-            csv_files = list(converted_dir.glob("*.csv"))
-            print(f"✓ 전처리 완료: {len(csv_files)}개 CSV 파일")
-            return str(converted_dir)
+        preprocess_script = self.project_root / "scripts" / "data" / "preprocess_sdd.py"
+        if not preprocess_script.exists():
+            print(f"❌ 전처리 스크립트 없음: {preprocess_script}")
+            return None
 
-        except Exception as e:
-            print(f"❌ 전처리 실패: {e}")
-            import traceback
+        # preprocess_sdd.py 실행
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(preprocess_script),
+                "--data_dir",
+                str(data_path_obj),
+                "--output_dir",
+                str(processed_dir),
+                "--sample_ratio",
+                str(self.config["data_sample_ratio"]),
+            ],
+            cwd=self.project_root,
+        )
 
-            traceback.print_exc()
+        if result.returncode == 0 and windows_file.exists():
+            print(f"✓ 윈도우 생성 완료: {windows_file}")
+            return str(processed_dir)
+        else:
+            print("❌ 윈도우 생성 실패")
             return None
 
     def train_model(self, data_dir: str):

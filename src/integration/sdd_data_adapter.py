@@ -79,6 +79,7 @@ class HomographyEstimator:
 
     def load_from_file(self, file_path: Path):
         """파일에서 호모그래피 행렬 로드"""
+        file_path = Path(file_path) if isinstance(file_path, str) else file_path
         if file_path.suffix == '.txt':
             self.homography_matrix = np.loadtxt(file_path)
         elif file_path.suffix == '.pkl':

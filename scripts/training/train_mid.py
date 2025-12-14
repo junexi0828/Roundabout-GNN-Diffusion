@@ -145,7 +145,11 @@ def main():
         node_features=model_config.get('node_features', 9)
     )
 
-    print(f"  모델 파라미터 수: {sum(p.numel() for p in model.parameters()):,}")
+    try:
+        param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        print(f"  모델 파라미터 수: {param_count:,}")
+    except:
+        print("  모델 파라미터 수: (초기화 후 계산)")
 
     # 체크포인트 로드 (재개)
     if args.resume:
