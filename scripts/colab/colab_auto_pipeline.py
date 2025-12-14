@@ -181,10 +181,10 @@ class ColabAutoPipeline:
                 # 최신 버전으로 업데이트
                 print("  최신 버전으로 업데이트 중...")
                 result = subprocess.run(
-                    ["git", "pull"], 
-                    cwd=self.project_root, 
+                    ["git", "pull"],
+                    cwd=self.project_root,
                     check=False,
-                    capture_output=True
+                    capture_output=True,
                 )
                 if result.returncode == 0:
                     print("  ✓ 업데이트 완료")
@@ -206,7 +206,7 @@ class ColabAutoPipeline:
             Path("/content/Roundabout-GNN-Diffusion"),
             Path("/content/Roundabout_AI"),
         ]
-        
+
         for clone_dir in possible_clone_dirs:
             if clone_dir.exists() and (clone_dir / "src").exists():
                 print(f"✓ 이미 클론된 저장소 발견: {clone_dir}")
@@ -231,20 +231,20 @@ class ColabAutoPipeline:
                         ["git", "clone", self.github_repo, str(clone_path)],
                         check=True,
                         capture_output=True,
-                        text=True
+                        text=True,
                     )
                     self.project_root = clone_path
                     if str(self.project_root) not in sys.path:
                         sys.path.insert(0, str(self.project_root))
                     print("✓ 저장소 클론 완료")
                     return
-            
+
             # 일반적인 클론
             subprocess.run(
                 ["git", "clone", self.github_repo, str(self.project_root)],
                 check=True,
                 capture_output=True,
-                text=True
+                text=True,
             )
             print("✓ 저장소 클론 완료")
         except subprocess.CalledProcessError as e:
@@ -257,9 +257,11 @@ class ColabAutoPipeline:
             print("  3. 저장소 URL이 잘못됨")
             print("\n  해결 방법:")
             print("  1. 저장소를 public으로 변경")
-            print("  2. 또는 수동으로 클론: !git clone https://github.com/junexi0828/Roundabout-GNN-Diffusion.git")
+            print(
+                "  2. 또는 수동으로 클론: !git clone https://github.com/junexi0828/Roundabout-GNN-Diffusion.git"
+            )
             print("  3. 이미 클론된 경우 계속 진행됩니다")
-            
+
             # 이미 클론된 경우를 다시 확인
             for clone_dir in possible_clone_dirs:
                 if clone_dir.exists() and (clone_dir / "src").exists():
@@ -268,7 +270,7 @@ class ColabAutoPipeline:
                     if str(self.project_root) not in sys.path:
                         sys.path.insert(0, str(self.project_root))
                     return
-            
+
             raise
 
     def mount_drive(self):
@@ -778,7 +780,9 @@ class ColabAutoPipeline:
                     return False
                 else:
                     # 다른 단계는 경고만 하고 계속 진행
-                    print(f"  경고: {name} 단계에서 문제가 발생했지만 계속 진행합니다...")
+                    print(
+                        f"  경고: {name} 단계에서 문제가 발생했지만 계속 진행합니다..."
+                    )
 
         # 데이터 전처리
         try:

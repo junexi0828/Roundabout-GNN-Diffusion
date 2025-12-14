@@ -11,7 +11,7 @@ import numpy as np
 import json
 from typing import Dict
 
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.models.mid_model import create_mid_model
