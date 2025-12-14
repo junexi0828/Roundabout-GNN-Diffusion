@@ -15,6 +15,7 @@ import subprocess
 import time
 from typing import Dict, Optional
 import json
+import shutil
 
 # Colab 환경 확인
 try:
@@ -60,13 +61,21 @@ class ColabAutoPipeline:
 
             self.project_root = None
             for root in possible_roots:
-                if root.exists() and (root / "src").exists() and (root / "scripts").exists():
+                if (
+                    root.exists()
+                    and (root / "src").exists()
+                    and (root / "scripts").exists()
+                ):
                     self.project_root = root
                     break
 
             if self.project_root is None:
                 # 기본값 사용
-                self.project_root = current_dir if (current_dir / "src").exists() else Path("/content/Roundabout_AI")
+                self.project_root = (
+                    current_dir
+                    if (current_dir / "src").exists()
+                    else Path("/content/Roundabout_AI")
+                )
 
             self.drive_root = Path("/content/drive/MyDrive")
         else:
@@ -202,71 +211,136 @@ class ColabAutoPipeline:
                 "  수동 마운트: from google.colab import drive; drive.mount('/content/drive')"
             )
 
-    def prepare_data(self):
-        """4. 데이터 준비"""
-        print("\n[데이터 준비]")
+    def download_sdd_data(self, output_dir: Path):
+        """SDD Death Circle 데이터 자동 다운로드"""
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
 
-        # 여러 가능한 경로 확인
-        possible_paths = [
-            self.project_root / "data" / "sdd" / "converted",  # 이미 전처리된 데이터
-            self.project_root / "data" / "sdd" / "deathCircle",  # 원본 데이터
-            Path("/content/Roundabout-GNN-Diffusion/data/sdd/converted"),
-            Path("/content/Roundabout_AI/data/sdd/converted"),
-            self.data_dir,
-            self.drive_root / "Roundabout_AI_Data",
-            self.drive_root / "Roundabout_AI" / "data" / "sdd",
-        ]
+        # 이미 데이터가 있는지 확인
+        annotation_files = list(output_dir.glob("**/annotations.txt"))
+        if annotation_files:
+            print(f"✓ SDD 데이터 이미 존재: {len(annotation_files)}개 파일")
+            return True
 
-        data_path = None
-        for path in possible_paths:
-            path_obj = Path(path)
-            if path_obj.exists():
-                # CSV 파일 또는 annotations.txt 확인
-                if path_obj.is_dir():
-                    csv_files = list(path_obj.glob("*.csv"))
-                    ann_files = list(path_obj.glob("**/annotations.txt"))
-                    if csv_files or ann_files:
-                        print(f"✓ 데이터 디렉토리 발견: {path_obj}")
-                        data_path = path_obj
-                        break
-                elif path_obj.is_file():
-                    print(f"✓ 데이터 파일 발견: {path_obj}")
-                    data_path = path_obj.parent
+        print("SDD Death Circle 데이터 다운로드 중...")
+        repo_url = "https://github.com/flclain/StanfordDroneDataset.git"
+        temp_dir = output_dir.parent / "temp_sdd"
+
+        try:
+            # 임시 디렉토리에 클론
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir)
+
+            subprocess.run(
+                ["git", "clone", "--depth", "1", repo_url, str(temp_dir)],
+                check=True,
+                capture_output=True,
+            )
+
+            # Death Circle 디렉토리 찾기
+            deathcircle_dir = None
+            for root_dir in [temp_dir, temp_dir / "annotations"]:
+                if (root_dir / "annotations" / "deathCircle").exists():
+                    deathcircle_dir = root_dir / "annotations" / "deathCircle"
+                    break
+                elif (root_dir / "deathCircle").exists():
+                    deathcircle_dir = root_dir / "deathCircle"
                     break
 
-        if data_path is None:
-            print(f"⚠️  데이터 디렉토리 없음")
-            print("\n📋 수동 작업 필요:")
-            print("1. SDD Death Circle 비디오 다운로드")
-            print("2. Google Drive에 업로드")
-            print(f"3. 가능한 경로:")
-            for path in possible_paths:
-                print(f"   - {path}")
-            print("\n기다리는 중... (30초)")
-            time.sleep(30)
+            if deathcircle_dir is None:
+                raise FileNotFoundError("Death Circle 디렉토리를 찾을 수 없습니다")
 
-            # 다시 확인
-            for path in possible_paths:
-                path_obj = Path(path)
-                if path_obj.exists():
-                    csv_files = list(path_obj.glob("*.csv"))
-                    ann_files = list(path_obj.glob("**/annotations.txt"))
-                    if csv_files or ann_files:
-                        data_path = path_obj
-                        break
+            # 어노테이션 파일 찾기 및 복사
+            annotation_files = list(deathcircle_dir.glob("**/annotations.txt"))
+            if not annotation_files:
+                annotation_files = list(deathcircle_dir.glob("**/*.txt"))
 
-        if data_path:
-            return str(data_path)
-        else:
-            print("⚠️  데이터를 찾을 수 없습니다. 기본 경로 사용")
-            return "data/sdd/converted"
+            if not annotation_files:
+                raise FileNotFoundError("어노테이션 파일을 찾을 수 없습니다")
+
+            for ann_file in annotation_files:
+                rel_path = ann_file.relative_to(deathcircle_dir)
+                dest_path = output_dir / rel_path
+                dest_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ann_file, dest_path)
+
+            # 임시 디렉토리 정리
+            shutil.rmtree(temp_dir)
+            print(f"✓ 다운로드 완료: {len(annotation_files)}개 파일")
+            return True
+
+        except Exception as e:
+            print(f"❌ 다운로드 실패: {e}")
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir, ignore_errors=True)
+            return False
+
+    def preprocess_sdd_data(self, sdd_dir: Path, output_dir: Path):
+        """SDD 데이터 전처리"""
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # 이미 전처리된 데이터가 있는지 확인
+        csv_files = list(output_dir.glob("*.csv"))
+        if csv_files:
+            print(f"✓ 전처리된 데이터 이미 존재: {len(csv_files)}개 CSV 파일")
+            return True
+
+        print("SDD 데이터 전처리 중...")
+        try:
+            from src.data_processing.sdd_adapter import SDDAdapter
+
+            adapter = SDDAdapter(sdd_dir)
+            adapter.convert_all_videos(output_dir)
+            print(f"✓ 전처리 완료: {len(list(output_dir.glob('*.csv')))}개 CSV 파일")
+            return True
+        except Exception as e:
+            print(f"❌ 전처리 실패: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+
+    def prepare_data(self):
+        """4. 데이터 준비 및 다운로드"""
+        print("\n[데이터 준비]")
+
+        # 전처리된 데이터 우선 확인
+        converted_dir = self.project_root / "data" / "sdd" / "converted"
+        if converted_dir.exists():
+            csv_files = list(converted_dir.glob("*.csv"))
+            if csv_files:
+                print(f"✓ 전처리된 데이터 발견: {len(csv_files)}개 CSV 파일")
+                return str(converted_dir)
+
+        # 원본 데이터 확인
+        sdd_dir = self.project_root / "data" / "sdd" / "deathCircle"
+        
+        # 데이터가 없으면 자동 다운로드
+        if not sdd_dir.exists() or not list(sdd_dir.glob("**/annotations.txt")):
+            print("데이터가 없습니다. 자동 다운로드 시작...")
+            if not self.download_sdd_data(sdd_dir):
+                print("⚠️  데이터 다운로드 실패")
+                return None
+
+        # 전처리된 데이터가 없으면 전처리 실행
+        if not converted_dir.exists() or not list(converted_dir.glob("*.csv")):
+            print("전처리된 데이터가 없습니다. 자동 전처리 시작...")
+            if not self.preprocess_sdd_data(sdd_dir, converted_dir):
+                print("⚠️  데이터 전처리 실패")
+                return None
+
+        # 전처리된 데이터 경로 반환
+        if converted_dir.exists() and list(converted_dir.glob("*.csv")):
+            return str(converted_dir)
+        
+        return str(sdd_dir) if sdd_dir.exists() else None
 
     def preprocess_data(self, data_path: str):
         """5. 데이터 전처리"""
         print("\n[데이터 전처리]")
-        
+
         data_path_obj = Path(data_path)
-        
+
         # 이미 전처리된 데이터가 있는지 확인
         processed_dir = self.project_root / "data" / "processed"
         if processed_dir.exists():
@@ -275,23 +349,25 @@ class ColabAutoPipeline:
                 print(f"✓ 이미 전처리된 데이터 발견: {processed_dir}")
                 print(f"  파일: {len(pkl_files)}개")
                 return str(processed_dir)
-        
+
         # converted 데이터가 있으면 이미 전처리된 것으로 간주
         if "converted" in str(data_path_obj):
             print(f"✓ 변환된 데이터 사용: {data_path_obj}")
             # 윈도우 생성만 수행
             try:
                 from src.integration.sdd_data_adapter import SDDDataAdapter
+
                 adapter = SDDDataAdapter()
                 windows = adapter.load_and_preprocess(data_path_obj)
-                
+
                 output_dir = self.project_root / "data" / "processed"
                 output_dir.mkdir(parents=True, exist_ok=True)
-                
+
                 import pickle
+
                 with open(output_dir / "sdd_windows.pkl", "wb") as f:
                     pickle.dump(windows, f)
-                
+
                 print(f"✓ 윈도우 생성 완료: {len(windows)}개")
                 return str(output_dir)
             except Exception as e:
@@ -350,7 +426,9 @@ class ColabAutoPipeline:
         print(f"\n[베이스라인 학습: {baseline_name.upper()}]")
 
         if baseline_name == "a3tgcn":
-            train_script = self.project_root / "scripts" / "training" / "train_a3tgcn.py"
+            train_script = (
+                self.project_root / "scripts" / "training" / "train_a3tgcn.py"
+            )
             config_file = self.project_root / "configs" / "a3tgcn_config.yaml"
         else:
             print(f"⚠️  알 수 없는 베이스라인: {baseline_name}")
@@ -473,7 +551,9 @@ class ColabAutoPipeline:
         print("\n[베이스라인 비교 평가]")
 
         # 비교 평가 스크립트 실행
-        compare_script = self.project_root / "scripts" / "evaluation" / "compare_baselines.py"
+        compare_script = (
+            self.project_root / "scripts" / "evaluation" / "compare_baselines.py"
+        )
 
         if not compare_script.exists():
             print("⚠️  비교 평가 스크립트 없음")
@@ -578,7 +658,7 @@ class ColabAutoPipeline:
             (1, 10, "환경 설정", self.setup_environment),
             (2, 10, "GitHub 저장소 클론", self.clone_repository),
             (3, 10, "Google Drive 마운트", self.mount_drive),
-            (4, 10, "데이터 준비", self.prepare_data),
+            (4, 10, "데이터 다운로드 및 전처리", self.prepare_data),
         ]
 
         # 단계별 실행

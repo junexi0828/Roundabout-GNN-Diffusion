@@ -142,7 +142,7 @@ def preprocess_in_colab(sdd_dir: Path, output_dir: Path):
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # 이미 전처리된 데이터가 있는지 확인
     csv_files = list(output_dir.glob("*.csv"))
     if csv_files:
