@@ -87,7 +87,23 @@ class LocalAutoPipeline:
     def check_environment(self):
         """1. 환경 확인"""
         print("\n[환경 확인]")
+        
+        # Python 버전 확인 및 경고
+        python_version = sys.version_info
         print(f"Python 버전: {sys.version}")
+        
+        if python_version.major != 3 or python_version.minor not in [10, 11, 12]:
+            if python_version.minor >= 13:
+                print("\n⚠️  경고: Python 3.13+는 PyTorch와 호환성 문제가 있을 수 있습니다.")
+                print("  권장: Python 3.10 사용")
+            elif python_version.minor < 10:
+                print("\n⚠️  경고: Python 3.9 이하는 지원되지 않습니다.")
+                print("  권장: Python 3.10 사용")
+        
+        # Python 3.10 사용 권장
+        if python_version.minor != 10:
+            print(f"\n💡 권장: Python 3.10 사용 (현재: {python_version.major}.{python_version.minor})")
+        
         print(f"프로젝트 경로: {self.project_root}")
 
         # 필수 라이브러리 확인
@@ -221,16 +237,26 @@ class LocalAutoPipeline:
             return None
 
     def train_model(self, data_dir: str):
-        """4. 모델 학습 (HSG-Diffusion)"""
-        print("\n[모델 학습: HSG-Diffusion]")
+        """4. 모델 학습 (MID)"""
+        print("\n[모델 학습: MID]")
 
-        # 설정 파일
-        config_file = self.project_root / "configs" / f"mid_config_{self.mode}.yaml"
-
-        if not config_file.exists():
-            print(f"⚠️  설정 파일 없음: {config_file}")
-            config_file = self.project_root / "configs" / "mid_config_fast.yaml"
-            print(f"기본 설정 사용: {config_file}")
+        # 설정 파일 (모드별 우선순위)
+        config_files = [
+            self.project_root / "configs" / f"mid_config_{self.mode}.yaml",
+            self.project_root / "configs" / "mid_config_fast.yaml",
+            self.project_root / "configs" / "mid_config_standard.yaml",
+        ]
+        
+        config_file = None
+        for cfg in config_files:
+            if cfg.exists():
+                config_file = cfg
+                break
+        
+        if not config_file:
+            print(f"⚠️  설정 파일 없음: {config_files[0]}")
+            print("기본 설정 파일을 찾을 수 없습니다.")
+            return False
 
         print(f"✓ 설정 파일: {config_file}")
 
@@ -327,7 +353,7 @@ class LocalAutoPipeline:
         # 4. 모델 학습
         try:
             success = self.step(
-                4, 5, "모델 학습 (HSG-Diffusion)", lambda: self.train_model(processed_dir)
+                4, 5, "모델 학습 (MID)", lambda: self.train_model(processed_dir)
             )
             if not success:
                 print("⚠️  학습 실패")
@@ -346,11 +372,11 @@ class LocalAutoPipeline:
         print("✓ 전체 파이프라인 완료!")
         print("=" * 80)
         print(f"\n결과 위치:")
-        print(f"  체크포인트: checkpoints/mid_{self.mode}/")
-        print(f"  TensorBoard: runs/mid_{self.mode}/")
+        print(f"  체크포인트: checkpoints/mid/")
+        print(f"  TensorBoard: runs/mid/")
         print(f"  시각화: results/visualizations/")
         print(f"\nTensorBoard 실행:")
-        print(f"  tensorboard --logdir runs/mid_{self.mode}")
+        print(f"  tensorboard --logdir runs/mid")
 
         return True
 
