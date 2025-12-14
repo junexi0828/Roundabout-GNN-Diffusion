@@ -333,7 +333,11 @@ class MIDTrainer:
 
                     # Forward diffusion
                     noise = torch.randn_like(future_data)
-                    x_t = self.model.q_sample(future_data, t, noise)
+                    # HybridGNNMID는 내부에 mid 모델을 가지고 있음
+                    if hasattr(self.model, 'mid'):
+                        x_t = self.model.mid.q_sample(future_data, t, noise)
+                    else:
+                        x_t = self.model.q_sample(future_data, t, noise)
 
                     # 노이즈 예측
                     pred_noise = self.model(
