@@ -174,14 +174,11 @@ class ColabAutoPipeline:
             [sys.executable, "-m", "pip", "install", "-q", "torch-geometric"],
             check=True,
         )
-                    )
-                    print(
-                        "  ⚠️  torch-geometric-temporal 설치 실패, A3TGCN 학습은 건너뜁니다"
-                    )
-                else:
-                    print("  ✓ torch-geometric-temporal (0.54.0) 설치 완료")
-            else:
-                print("  ✓ torch-geometric-temporal 설치 완료")
+
+        print("  ✓ torch-geometric 설치 완료")
+        print("  ℹ️  torch-geometric-temporal 제거됨 (커스텀 ST Encoder 사용)")
+
+        print("✓ 라이브러리 설치 완료")
 
         print("✓ 라이브러리 설치 완료")
 
