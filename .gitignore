@@ -35,7 +35,11 @@ ENV/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+# notebooks/colab_auto.ipynb는 Colab에서 필요하므로 포함
+# 다른 노트북은 ignore하되, colab_auto.ipynb는 예외
 *.ipynb
+!notebooks/
+!notebooks/*.ipynb
 
 # Data (대용량 파일)
 data/

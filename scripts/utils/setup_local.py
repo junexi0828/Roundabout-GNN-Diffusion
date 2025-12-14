@@ -106,7 +106,7 @@ def main():
     print("=" * 80)
     print("\n다음 단계:")
     print("1. 데이터 전처리: python src/data_processing/preprocessor.py")
-    print("2. 빠른 학습: python scripts/fast_train.py --device mps --batch_size 16")
+    print("2. 빠른 학습: python scripts/training/fast_train.py --device mps --batch_size 16")
 
 if __name__ == "__main__":
     main()

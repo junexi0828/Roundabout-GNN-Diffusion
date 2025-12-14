@@ -54,7 +54,7 @@ print(f"MPS 빌드됨: {torch.backends.mps.is_built()}")
 
 ```bash
 # 작은 배치 크기와 데이터 샘플링
-python scripts/fast_train.py \
+python scripts/training/fast_train.py \
     --data_dir data/processed \
     --batch_size 8 \
     --epochs 30 \
@@ -73,7 +73,7 @@ python scripts/fast_train.py \
 
 ```bash
 # MPS 사용 (Apple Silicon GPU)
-python scripts/fast_train.py \
+python scripts/training/fast_train.py \
     --data_dir data/processed \
     --batch_size 16 \
     --epochs 30 \
@@ -92,7 +92,7 @@ python scripts/fast_train.py \
 
 ```bash
 # 최소 설정으로 빠른 테스트
-python scripts/fast_train.py \
+python scripts/training/fast_train.py \
     --data_dir data/processed \
     --batch_size 4 \
     --epochs 20 \
@@ -192,7 +192,7 @@ accumulation_steps = 4  # batch_size=4 * 4 = 효과적 배치 크기 16
 
 ### Phase 1: 빠른 테스트 (30분)
 ```bash
-python scripts/fast_train.py \
+python scripts/training/fast_train.py \
     --batch_size 4 \
     --epochs 10 \
     --sample_ratio 0.1 \
@@ -203,7 +203,7 @@ python scripts/fast_train.py \
 
 ### Phase 2: 기본 학습 (1-2시간)
 ```bash
-python scripts/fast_train.py \
+python scripts/training/fast_train.py \
     --batch_size 16 \
     --epochs 30 \
     --sample_ratio 0.3 \
@@ -214,7 +214,7 @@ python scripts/fast_train.py \
 
 ### Phase 3: 최종 학습 (2-4시간)
 ```bash
-python scripts/fast_train.py \
+python scripts/training/fast_train.py \
     --batch_size 16 \
     --epochs 50 \
     --sample_ratio 0.5 \

@@ -62,7 +62,7 @@ patience = 5  # 기본 10 → 5로 단축
 
 ```python
 # 빠른 학습 (1-2시간)
-!python scripts/fast_train.py \
+!python scripts/training/fast_train.py \
     --data_dir data/processed \
     --batch_size 64 \
     --epochs 30 \
@@ -74,7 +74,7 @@ patience = 5  # 기본 10 → 5로 단축
 ### 로컬에서 실행
 
 ```bash
-python scripts/fast_train.py \
+python scripts/training/fast_train.py \
     --data_dir data/processed \
     --batch_size 64 \
     --epochs 30 \
@@ -94,7 +94,7 @@ python scripts/fast_train.py \
 ### 초고속 학습 설정
 
 ```python
-!python scripts/fast_train.py \
+!python scripts/training/fast_train.py \
     --batch_size 128 \
     --epochs 20 \
     --sample_ratio 0.1 \  # 10%만 사용

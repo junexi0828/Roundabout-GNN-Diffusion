@@ -175,7 +175,7 @@ kaggle datasets download -d fedesoriano/argoverse-motion-forecasting-dataset
    ```bash
    # Kaggle에서 다운로드
    # 데이터 구조 확인
-   python scripts/verify_dataset.py --dataset argoverse
+   python scripts/data/verify_dataset.py --dataset argoverse
    ```
 
 2. **데이터 어댑터 개발**

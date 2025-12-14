@@ -27,7 +27,7 @@
 
 ```bash
 source venv/bin/activate
-python scripts/fast_train.py \
+python scripts/training/fast_train.py \
     --data_dir data/processed \
     --batch_size 16 \
     --epochs 30 \
@@ -43,7 +43,7 @@ python scripts/fast_train.py \
 
 ```bash
 source venv/bin/activate
-python scripts/fast_train.py \
+python scripts/training/fast_train.py \
     --data_dir data/processed \
     --batch_size 8 \
     --epochs 30 \
@@ -59,7 +59,7 @@ python scripts/fast_train.py \
 
 ```bash
 source venv/bin/activate
-python scripts/fast_train.py \
+python scripts/training/fast_train.py \
     --data_dir data/processed \
     --batch_size 4 \
     --epochs 20 \
@@ -117,7 +117,7 @@ python -c "import pandas as pd; df = pd.read_csv('data/sdd/converted/video0_conv
 
 ```bash
 source venv/bin/activate
-python scripts/fast_train.py \
+python scripts/training/fast_train.py \
     --device mps \
     --batch_size 16 \
     --sample_ratio 0.3 \

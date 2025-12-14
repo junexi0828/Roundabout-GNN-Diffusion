@@ -5,7 +5,7 @@ Index Batching을 활용한 메모리 효율적인 데이터 로딩
 
 import torch
 from torch.utils.data import Dataset, DataLoader
-from torch_geometric.data import Data, Batch
+from torch_geometric.data import Data, Batch, HeteroData
 from typing import List, Dict, Optional, Tuple
 import numpy as np
 import pandas as pd
@@ -23,7 +23,7 @@ class TrajectoryDataset(Dataset):
         self,
         windows: List[Dict],
         scene_graph_builder=None,
-        use_scene_graph: bool = True
+        use_scene_graph: bool = True,
     ):
         """
         Args:
@@ -51,24 +51,152 @@ class TrajectoryDataset(Dataset):
         """
         window = self.windows[idx]
 
-        obs_data = window['obs_data']
-        pred_data = window['pred_data']
+        obs_data = window["obs_data"]
+        pred_data = window["pred_data"]
 
         result = {
-            'obs_data': obs_data,
-            'pred_data': pred_data,
-            'track_id': window['track_id']
+            "obs_data": obs_data,
+            "pred_data": pred_data,
+            "track_id": window["track_id"],
         }
 
         # 씬 그래프 생성
         if self.use_scene_graph and self.scene_graph_builder is not None:
             # 마지막 관측 프레임으로 그래프 생성
-            last_frame = obs_data.iloc[-1] if isinstance(obs_data, pd.DataFrame) else obs_data[-1]
-            frame_data = obs_data if isinstance(obs_data, pd.DataFrame) else pd.DataFrame([obs_data])
+            if isinstance(obs_data, pd.DataFrame):
+                frame_data = obs_data
+            else:
+                # Tensor를 DataFrame으로 변환 (간단한 버전)
+                frame_data = pd.DataFrame(
+                    {
+                        "track_id": [window.get("track_id", 0)],
+                        "x": [
+                            (
+                                obs_data[-1, 0].item()
+                                if hasattr(obs_data, "item")
+                                else obs_data[-1, 0]
+                            )
+                        ],
+                        "y": [
+                            (
+                                obs_data[-1, 1].item()
+                                if hasattr(obs_data, "item")
+                                else obs_data[-1, 1]
+                            )
+                        ],
+                        "vx": [
+                            (
+                                obs_data[-1, 2].item()
+                                if obs_data.shape[1] > 2 and hasattr(obs_data, "item")
+                                else 0.0
+                            )
+                        ],
+                        "vy": [
+                            (
+                                obs_data[-1, 3].item()
+                                if obs_data.shape[1] > 3 and hasattr(obs_data, "item")
+                                else 0.0
+                            )
+                        ],
+                        "agent_type": [window.get("agent_type", "unknown")],
+                    }
+                )
 
+            # 일반 그래프 생성
             graph = self.scene_graph_builder.build_from_frame(frame_data)
             pyg_data = self.scene_graph_builder.to_pytorch_geometric()
-            result['graph'] = pyg_data
+            result["graph"] = pyg_data
+
+            # 이기종 그래프도 생성 (HeteroGAT용)
+            if "agent_type" in frame_data.columns:
+                try:
+                    from ..integration.mid_scene_graph import MIDSceneGraphIntegrator
+                    from ..models.mid_model import HybridGNNMID
+
+                    # 더미 모델로 integrator 생성 (실제로는 데이터셋에서 모델 필요 없음)
+                    # 대신 직접 HeteroData 생성
+                    from torch_geometric.data import HeteroData
+
+                    # 에이전트 타입별로 분류
+                    agent_types = frame_data["agent_type"].unique()
+                    hetero_data = HeteroData()
+
+                    for agent_type in agent_types:
+                        type_data = frame_data[frame_data["agent_type"] == agent_type]
+                        if len(type_data) > 0:
+                            # 특징 벡터 생성
+                            features = []
+                            for _, row in type_data.iterrows():
+                                feat = [
+                                    row.get("x", 0.0),
+                                    row.get("y", 0.0),
+                                    row.get("vx", 0.0),
+                                    row.get("vy", 0.0),
+                                    (
+                                        row.get("psi_rad", 0.0)
+                                        if "psi_rad" in row
+                                        else 0.0
+                                    ),
+                                    row.get("width", 0.0) if "width" in row else 0.0,
+                                    row.get("length", 0.0) if "length" in row else 0.0,
+                                ]
+                                features.append(feat)
+
+                            if features:
+                                hetero_data[agent_type].x = torch.tensor(
+                                    features, dtype=torch.float
+                                )
+
+                    # 엣지 생성 (간단한 버전 - 거리 기반)
+                    positions = frame_data[["x", "y"]].values
+                    for i, agent_type_i in enumerate(agent_types):
+                        type_i_data = frame_data[
+                            frame_data["agent_type"] == agent_type_i
+                        ]
+                        if len(type_i_data) == 0:
+                            continue
+                        indices_i = type_i_data.index.values
+
+                        for j, agent_type_j in enumerate(agent_types):
+                            if i == j:
+                                continue
+                            type_j_data = frame_data[
+                                frame_data["agent_type"] == agent_type_j
+                            ]
+                            if len(type_j_data) == 0:
+                                continue
+                            indices_j = type_j_data.index.values
+
+                            # 거리 기반 엣지 생성
+                            edge_list = []
+                            for idx_i, row_i in type_i_data.iterrows():
+                                for idx_j, row_j in type_j_data.iterrows():
+                                    dist = np.sqrt(
+                                        (row_i["x"] - row_j["x"]) ** 2
+                                        + (row_i["y"] - row_j["y"]) ** 2
+                                    )
+                                    if dist < 20.0:  # 20m 이내
+                                        edge_list.append(
+                                            [
+                                                list(type_i_data.index).index(idx_i),
+                                                list(type_j_data.index).index(idx_j),
+                                            ]
+                                        )
+
+                            if edge_list:
+                                edge_index = (
+                                    torch.tensor(edge_list, dtype=torch.long)
+                                    .t()
+                                    .contiguous()
+                                )
+                                hetero_data[
+                                    agent_type_i, "spatial", agent_type_j
+                                ].edge_index = edge_index
+
+                    result["hetero_graph"] = hetero_data
+                except Exception as e:
+                    # HeteroData 생성 실패 시 일반 그래프만 사용
+                    pass
 
         return result
 
@@ -84,7 +212,7 @@ class IndexBatchingDataLoader:
         data_dir: Path,
         batch_size: int = 32,
         shuffle: bool = True,
-        num_workers: int = 0
+        num_workers: int = 0,
     ):
         """
         Args:
@@ -113,7 +241,7 @@ class IndexBatchingDataLoader:
             np.random.shuffle(self.indices)
 
         for i in range(0, len(self.indices), self.batch_size):
-            batch_indices = self.indices[i:i + self.batch_size]
+            batch_indices = self.indices[i : i + self.batch_size]
             batch = self._load_batch(batch_indices)
             yield batch
 
@@ -122,10 +250,10 @@ class IndexBatchingDataLoader:
         batch = []
         for idx in indices:
             data_file = self.data_files[idx]
-            with open(data_file, 'rb') as f:
+            with open(data_file, "rb") as f:
                 data = pickle.load(f)
                 # 각 윈도우를 배치에 추가
-                batch.extend(data.get('windows', []))
+                batch.extend(data.get("windows", []))
         return batch
 
 
@@ -143,51 +271,59 @@ def collate_fn(batch: List[Dict]) -> Dict:
     obs_data_list = []
     pred_data_list = []
     graphs = []
+    hetero_graphs = []
     track_ids = []
 
     for sample in batch:
-        obs_data = sample['obs_data']
-        pred_data = sample['pred_data']
+        obs_data = sample["obs_data"]
+        pred_data = sample["pred_data"]
 
         # DataFrame을 Tensor로 변환
         if isinstance(obs_data, pd.DataFrame):
             obs_tensor = torch.tensor(
-                obs_data[['x', 'y', 'vx', 'vy', 'psi_rad']].values,
-                dtype=torch.float
+                obs_data[["x", "y", "vx", "vy", "psi_rad"]].values, dtype=torch.float
             )
         else:
             obs_tensor = torch.tensor(obs_data, dtype=torch.float)
 
         if isinstance(pred_data, pd.DataFrame):
-            pred_tensor = torch.tensor(
-                pred_data[['x', 'y']].values,
-                dtype=torch.float
-            )
+            pred_tensor = torch.tensor(pred_data[["x", "y"]].values, dtype=torch.float)
         else:
             pred_tensor = torch.tensor(pred_data, dtype=torch.float)
 
         obs_data_list.append(obs_tensor)
         pred_data_list.append(pred_tensor)
-        track_ids.append(sample['track_id'])
+        track_ids.append(sample["track_id"])
 
         # 그래프가 있으면 추가
-        if 'graph' in sample:
-            graphs.append(sample['graph'])
+        if "graph" in sample:
+            graphs.append(sample["graph"])
+        elif "hetero_graph" in sample:
+            graphs.append(sample["hetero_graph"])
 
     # 배치화
     result = {
-        'obs_data': torch.stack(obs_data_list),  # [batch_size, obs_len, features]
-        'pred_data': torch.stack(pred_data_list),  # [batch_size, pred_len, 2]
-        'future_data': torch.stack(pred_data_list),  # MID 호환성 (future_trajectory)
-        'obs_trajectory': torch.stack(obs_data_list)[:, :, :2],  # MID용 (x, y만)
-        'future_trajectory': torch.stack(pred_data_list),  # MID용
-        'track_ids': track_ids
+        "obs_data": torch.stack(obs_data_list),  # [batch_size, obs_len, features]
+        "pred_data": torch.stack(pred_data_list),  # [batch_size, pred_len, 2]
+        "future_data": torch.stack(pred_data_list),  # MID 호환성 (future_trajectory)
+        "obs_trajectory": torch.stack(obs_data_list)[:, :, :2],  # MID용 (x, y만)
+        "future_trajectory": torch.stack(pred_data_list),  # MID용
+        "track_ids": track_ids,
     }
 
     # 그래프 배치화
     if graphs:
-        result['graph'] = Batch.from_data_list(graphs)
-        result['graph_data'] = result['graph']  # MID 호환성
+        # 일반 Data 객체
+        result["graph"] = Batch.from_data_list(graphs)
+        result["graph_data"] = result["graph"]  # MID 호환성
+
+    # 이기종 그래프 배치화
+    if hetero_graphs:
+        # HeteroData는 Batch.from_data_list를 직접 사용
+        result["hetero_graph"] = Batch.from_data_list(hetero_graphs)
+        # hetero_graph가 있으면 우선 사용
+        if "graph_data" not in result:
+            result["graph_data"] = result["hetero_graph"]
 
     return result
 
@@ -197,7 +333,7 @@ def create_dataloader(
     batch_size: int = 32,
     shuffle: bool = True,
     num_workers: int = 0,
-    collate_fn=collate_fn
+    collate_fn=collate_fn,
 ) -> DataLoader:
     """
     데이터 로더 생성
@@ -218,7 +354,7 @@ def create_dataloader(
         shuffle=shuffle,
         num_workers=num_workers,
         collate_fn=collate_fn,
-        pin_memory=torch.cuda.is_available()
+        pin_memory=torch.cuda.is_available(),
     )
 
 
@@ -226,7 +362,7 @@ def split_dataset(
     windows: List[Dict],
     train_ratio: float = 0.7,
     val_ratio: float = 0.15,
-    test_ratio: float = 0.15
+    test_ratio: float = 0.15,
 ) -> Tuple[List[Dict], List[Dict], List[Dict]]:
     """
     데이터셋을 train/val/test로 분할
@@ -240,8 +376,9 @@ def split_dataset(
     Returns:
         (train_windows, val_windows, test_windows)
     """
-    assert abs(train_ratio + val_ratio + test_ratio - 1.0) < 1e-6, \
-        "비율의 합이 1이어야 합니다."
+    assert (
+        abs(train_ratio + val_ratio + test_ratio - 1.0) < 1e-6
+    ), "비율의 합이 1이어야 합니다."
 
     # 셔플
     indices = np.random.permutation(len(windows))
@@ -251,8 +388,8 @@ def split_dataset(
     n_val = int(len(windows) * val_ratio)
 
     train_indices = indices[:n_train]
-    val_indices = indices[n_train:n_train + n_val]
-    test_indices = indices[n_train + n_val:]
+    val_indices = indices[n_train : n_train + n_val]
+    test_indices = indices[n_train + n_val :]
 
     train_windows = [windows[i] for i in train_indices]
     val_windows = [windows[i] for i in val_indices]
@@ -266,22 +403,25 @@ def main():
     # 더미 데이터 생성
     windows = []
     for i in range(100):
-        windows.append({
-            'track_id': i,
-            'obs_frames': list(range(30)),
-            'pred_frames': list(range(30, 80)),
-            'obs_data': pd.DataFrame({
-                'x': np.random.randn(30),
-                'y': np.random.randn(30),
-                'vx': np.random.randn(30),
-                'vy': np.random.randn(30),
-                'psi_rad': np.random.randn(30)
-            }),
-            'pred_data': pd.DataFrame({
-                'x': np.random.randn(50),
-                'y': np.random.randn(50)
-            })
-        })
+        windows.append(
+            {
+                "track_id": i,
+                "obs_frames": list(range(30)),
+                "pred_frames": list(range(30, 80)),
+                "obs_data": pd.DataFrame(
+                    {
+                        "x": np.random.randn(30),
+                        "y": np.random.randn(30),
+                        "vx": np.random.randn(30),
+                        "vy": np.random.randn(30),
+                        "psi_rad": np.random.randn(30),
+                    }
+                ),
+                "pred_data": pd.DataFrame(
+                    {"x": np.random.randn(50), "y": np.random.randn(50)}
+                ),
+            }
+        )
 
     # 데이터셋 분할
     train_windows, val_windows, test_windows = split_dataset(windows)
@@ -306,4 +446,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

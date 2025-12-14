@@ -252,6 +252,60 @@ class SDDDataAdapter:
             'relations': relations
         }
 
+    def load_and_preprocess(
+        self,
+        data_dir: Optional[Path] = None
+    ) -> List[Dict]:
+        """
+        SDD 데이터 로드 및 전처리
+
+        Args:
+            data_dir: 데이터 디렉토리 (None이면 기본 경로)
+
+        Returns:
+            전처리된 윈도우 리스트
+        """
+        from ..data_processing.preprocessor import TrajectoryPreprocessor
+
+        if data_dir is None:
+            data_dir = Path("data/sdd/converted")
+        else:
+            data_dir = Path(data_dir)
+
+        # CSV 파일 로드
+        csv_files = list(data_dir.glob("*.csv"))
+        if not csv_files:
+            # annotations.txt 파일 찾기
+            ann_files = list(data_dir.glob("**/annotations.txt"))
+            if ann_files:
+                # 어노테이션 파일 변환
+                print(f"어노테이션 파일 발견: {len(ann_files)}개")
+                # 간단한 변환 (실제로는 더 정교한 로직 필요)
+                return []
+            else:
+                raise FileNotFoundError(f"데이터 파일을 찾을 수 없습니다: {data_dir}")
+
+        # CSV 파일 통합
+        all_data = []
+        for csv_file in csv_files:
+            df = pd.read_csv(csv_file)
+            all_data.append(df)
+
+        combined_df = pd.concat(all_data, ignore_index=True)
+        print(f"✓ 데이터 로드: {len(combined_df):,}행")
+
+        # 전처리
+        preprocessor = TrajectoryPreprocessor(
+            obs_window=30,
+            pred_window=50,
+            sampling_rate=10.0
+        )
+
+        # 윈도우 생성
+        windows = preprocessor.create_sliding_windows(combined_df)
+
+        return windows
+
 
 def main():
     """테스트용 메인 함수"""

@@ -176,7 +176,7 @@
 
 ```bash
 # 데이터셋 다운로드 후
-python scripts/verify_dataset.py --dataset round
+python scripts/data/verify_dataset.py --dataset round
 ```
 
 ### 2단계: 시나리오 타입 자동 분류 모듈 개발
