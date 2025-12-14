@@ -99,9 +99,9 @@ evaluation:
     - "ade"
     - "fde"
 
-  # ⚡⚡ 최소 샘플링
-  num_samples: 5       # 10 → 5
-  ddim_steps: 2
+  # ⚡⚡ 최소 샘플링 (1분 내 완료용)
+  num_samples: 3       # 5 → 3 (더 빠른 평가)
+  ddim_steps: 1        # 2 → 1 (더 빠른 샘플링)
   ddim_eta: 0.0
 
   # ⚡⚡ 평가 최소화 (1분 내 완료용)
