@@ -93,7 +93,9 @@ class MIDTrainer:
         # Mixed Precision Training
         self.use_amp = config.get('use_amp', False)
         if self.use_amp:
-            self.scaler = torch.cuda.amp.GradScaler()
+            # MPS 호환 GradScaler
+            device_type = 'cuda' if 'cuda' in str(self.device) else 'cpu'
+            self.scaler = torch.amp.GradScaler(device_type)
 
         # TensorBoard
         log_dir = config.get('log_dir', 'runs/mid')
@@ -150,7 +152,8 @@ class MIDTrainer:
 
             # Forward pass (Mixed Precision)
             if self.use_amp:
-                with torch.amp.autocast('cuda'):
+                device_type = 'cuda' if 'cuda' in str(self.device) else 'cpu'
+                with torch.amp.autocast(device_type):
                     if future_data is not None:
                         # 타임스텝 랜덤 샘플링
                         batch_size = future_data.size(0)

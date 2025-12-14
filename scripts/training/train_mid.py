@@ -44,14 +44,18 @@ def load_processed_data(data_dir: Path):
 
 def setup_device(config: dict) -> torch.device:
     """디바이스 설정"""
-    if config['device']['use_cuda'] and torch.cuda.is_available():
-        device_id = config['device'].get('device_id', 0)
-        device = torch.device(f'cuda:{device_id}')
-        print(f"✓ GPU 사용: {torch.cuda.get_device_name(device_id)}")
+    # 디바이스 설정 (MPS 우선)
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        print(f"✓ CUDA 사용 (GPU: {torch.cuda.get_device_name(0)})")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+        print("✓ MPS 사용 (Apple Silicon)")
     else:
-        device = torch.device('cpu')
+        device = torch.device("cpu")
         print("✓ CPU 사용")
 
+    config['device'] = str(device)
     return device
 
 
