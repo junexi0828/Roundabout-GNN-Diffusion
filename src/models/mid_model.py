@@ -849,6 +849,23 @@ class HybridGNNMID(nn.Module):
                             ).to(x.device)
                         x = self._empty_graph_encoder(x)
                         x = F.relu(x)
+                elif isinstance(self.gnn_encoder, type(self.gnn_encoder)) and hasattr(self.gnn_encoder, 'node_types'):
+                    # HeteroGAT인 경우 - 일반 GAT로 처리 불가, fallback
+                    # Convert Data to HeteroData for HeteroGAT
+                    if x.dim() == 1:
+                        x = x.unsqueeze(0)  # Ensure x is 2D for node features
+                    
+                    # Create a dummy HeteroData object
+                    temp_hetero_data = HeteroData()
+                    default_node_type = self.gnn_encoder.node_types[0] if hasattr(self.gnn_encoder, 'node_types') else 'agent'
+                    temp_hetero_data[default_node_type].x = x
+                    
+                    if edge_index.numel() > 0:
+                        default_edge_type = self.gnn_encoder.edge_types[0] if hasattr(self.gnn_encoder, 'edge_types') and self.gnn_encoder.edge_types else (default_node_type, 'spatial', default_node_type)
+                        temp_hetero_data[default_edge_type].edge_index = edge_index
+                    
+                    out_dict = self.gnn_encoder(temp_hetero_data.x_dict, temp_hetero_data.edge_index_dict)
+                    x = torch.cat(list(out_dict.values()), dim=0) if out_dict else x
                 else:
                     # HeteroGAT인 경우 - 일반 GAT로 처리 불가
                     # 입력 특징을 그대로 사용 (GNN 없이)
