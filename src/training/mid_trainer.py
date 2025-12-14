@@ -325,7 +325,11 @@ class MIDTrainer:
                 if future_data is not None:
                     # 타임스텝 랜덤 샘플링
                     batch_size = future_data.size(0)
-                    num_steps = self.config.get('num_diffusion_steps', 100)
+                    # HybridGNNMID는 내부에 mid 모델을 가지고 있음
+                    if hasattr(self.model, 'mid'):
+                        num_steps = self.model.mid.num_diffusion_steps
+                    else:
+                        num_steps = self.model.num_diffusion_steps
                     t = torch.randint(
                         0, num_steps,
                         (batch_size,), device=self.device
