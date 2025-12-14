@@ -180,17 +180,96 @@ class ColabAutoPipeline:
             if (self.project_root / ".git").exists():
                 # 최신 버전으로 업데이트
                 print("  최신 버전으로 업데이트 중...")
-                subprocess.run(["git", "pull"], cwd=self.project_root, check=False)
+                result = subprocess.run(
+                    ["git", "pull"], 
+                    cwd=self.project_root, 
+                    check=False,
+                    capture_output=True
+                )
+                if result.returncode == 0:
+                    print("  ✓ 업데이트 완료")
+                else:
+                    print("  ⚠️  업데이트 실패 (계속 진행)")
             return
 
+        # 현재 디렉토리 확인
+        current_dir = Path.cwd()
         print(f"\n[GitHub 저장소 클론]")
         print(f"  저장소: {self.github_repo}")
-        print(f"  경로: {self.project_root}")
+        print(f"  현재 디렉토리: {current_dir}")
+        print(f"  목표 경로: {self.project_root}")
 
-        subprocess.run(
-            ["git", "clone", self.github_repo, str(self.project_root)], check=True
-        )
-        print("✓ 저장소 클론 완료")
+        # 이미 다른 위치에 클론되어 있는지 확인
+        possible_clone_dirs = [
+            current_dir / "Roundabout-GNN-Diffusion",
+            current_dir / "Roundabout_AI",
+            Path("/content/Roundabout-GNN-Diffusion"),
+            Path("/content/Roundabout_AI"),
+        ]
+        
+        for clone_dir in possible_clone_dirs:
+            if clone_dir.exists() and (clone_dir / "src").exists():
+                print(f"✓ 이미 클론된 저장소 발견: {clone_dir}")
+                # 심볼릭 링크 생성 또는 경로 업데이트
+                if clone_dir != self.project_root:
+                    print(f"  프로젝트 루트를 {clone_dir}로 설정")
+                    self.project_root = clone_dir
+                    if str(self.project_root) not in sys.path:
+                        sys.path.insert(0, str(self.project_root))
+                return
+
+        # 저장소 클론 시도
+        try:
+            # 프로젝트 루트 디렉토리가 이미 존재하면 삭제하지 않고 그 안에 클론
+            if self.project_root.exists() and not (self.project_root / ".git").exists():
+                # 디렉토리가 비어있지 않으면 다른 이름으로 클론
+                if any(self.project_root.iterdir()):
+                    clone_name = "Roundabout-GNN-Diffusion"
+                    clone_path = current_dir / clone_name
+                    print(f"  기존 디렉토리 사용 중, {clone_name}로 클론...")
+                    subprocess.run(
+                        ["git", "clone", self.github_repo, str(clone_path)],
+                        check=True,
+                        capture_output=True,
+                        text=True
+                    )
+                    self.project_root = clone_path
+                    if str(self.project_root) not in sys.path:
+                        sys.path.insert(0, str(self.project_root))
+                    print("✓ 저장소 클론 완료")
+                    return
+            
+            # 일반적인 클론
+            subprocess.run(
+                ["git", "clone", self.github_repo, str(self.project_root)],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            print("✓ 저장소 클론 완료")
+        except subprocess.CalledProcessError as e:
+            print(f"⚠️  Git clone 실패: {e}")
+            print(f"  출력: {e.stdout if hasattr(e, 'stdout') else ''}")
+            print(f"  오류: {e.stderr if hasattr(e, 'stderr') else ''}")
+            print("\n  가능한 원인:")
+            print("  1. 저장소가 private이거나 인증이 필요함")
+            print("  2. 네트워크 연결 문제")
+            print("  3. 저장소 URL이 잘못됨")
+            print("\n  해결 방법:")
+            print("  1. 저장소를 public으로 변경")
+            print("  2. 또는 수동으로 클론: !git clone https://github.com/junexi0828/Roundabout-GNN-Diffusion.git")
+            print("  3. 이미 클론된 경우 계속 진행됩니다")
+            
+            # 이미 클론된 경우를 다시 확인
+            for clone_dir in possible_clone_dirs:
+                if clone_dir.exists() and (clone_dir / "src").exists():
+                    print(f"\n✓ 클론된 저장소 발견: {clone_dir}")
+                    self.project_root = clone_dir
+                    if str(self.project_root) not in sys.path:
+                        sys.path.insert(0, str(self.project_root))
+                    return
+            
+            raise
 
     def mount_drive(self):
         """3. Google Drive 마운트"""
@@ -297,6 +376,7 @@ class ColabAutoPipeline:
         except Exception as e:
             print(f"❌ 전처리 실패: {e}")
             import traceback
+
             traceback.print_exc()
             return False
 
@@ -314,7 +394,7 @@ class ColabAutoPipeline:
 
         # 원본 데이터 확인
         sdd_dir = self.project_root / "data" / "sdd" / "deathCircle"
-        
+
         # 데이터가 없으면 자동 다운로드
         if not sdd_dir.exists() or not list(sdd_dir.glob("**/annotations.txt")):
             print("데이터가 없습니다. 자동 다운로드 시작...")
@@ -332,7 +412,7 @@ class ColabAutoPipeline:
         # 전처리된 데이터 경로 반환
         if converted_dir.exists() and list(converted_dir.glob("*.csv")):
             return str(converted_dir)
-        
+
         return str(sdd_dir) if sdd_dir.exists() else None
 
     def preprocess_data(self, data_path: str):
