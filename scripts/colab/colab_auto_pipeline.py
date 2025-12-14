@@ -749,8 +749,36 @@ class ColabAutoPipeline:
                 if step_num == 4:  # 데이터 준비
                     data_path = result
             except Exception as e:
-                print(f"❌ {name} 실패: {e}")
-                return False
+                print(f"⚠️  {name} 실패: {e}")
+                # GitHub 클론 실패는 계속 진행 (이미 클론된 경우)
+                if step_num == 2:
+                    print("  이미 클론된 저장소를 찾아 계속 진행합니다...")
+                    # 프로젝트 루트 재확인
+                    current_dir = Path.cwd()
+                    for possible_dir in [
+                        current_dir / "Roundabout-GNN-Diffusion",
+                        current_dir / "Roundabout_AI",
+                        Path("/content/Roundabout-GNN-Diffusion"),
+                        Path("/content/Roundabout_AI"),
+                    ]:
+                        if possible_dir.exists() and (possible_dir / "src").exists():
+                            self.project_root = possible_dir
+                            if str(self.project_root) not in sys.path:
+                                sys.path.insert(0, str(self.project_root))
+                            print(f"  ✓ 프로젝트 루트 설정: {self.project_root}")
+                            # 작업 디렉토리 변경
+                            os.chdir(self.project_root)
+                            break
+                    else:
+                        print("  ❌ 프로젝트를 찾을 수 없습니다.")
+                        print(f"  수동으로 클론: !git clone {self.github_repo}")
+                        return False
+                elif step_num == 4:  # 데이터 준비 실패
+                    print("  ❌ 데이터 준비 실패")
+                    return False
+                else:
+                    # 다른 단계는 경고만 하고 계속 진행
+                    print(f"  경고: {name} 단계에서 문제가 발생했지만 계속 진행합니다...")
 
         # 데이터 전처리
         try:
