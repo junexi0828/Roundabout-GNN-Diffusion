@@ -144,8 +144,23 @@ class ColabAutoPipeline:
         """1. 환경 설정"""
         print("\n[환경 설정]")
 
-        # 시스템 정보
+        # Python 버전 확인 및 경고
+        python_version = sys.version_info
         print(f"Python 버전: {sys.version}")
+        
+        if python_version.major != 3 or python_version.minor not in [10, 11, 12]:
+            if python_version.minor >= 13:
+                print("\n⚠️  경고: Python 3.13+는 PyTorch와 호환성 문제가 있을 수 있습니다.")
+                print("  권장: Colab 런타임 > 런타임 유형 변경 > Python 3.10 선택")
+            elif python_version.minor < 10:
+                print("\n⚠️  경고: Python 3.9 이하는 지원되지 않습니다.")
+                print("  권장: Colab 런타임 > 런타임 유형 변경 > Python 3.10 선택")
+        
+        # Python 3.10 사용 권장
+        if python_version.minor != 10:
+            print(f"\n💡 권장: Python 3.10 사용 (현재: {python_version.major}.{python_version.minor})")
+            print("  Colab에서 변경: 런타임 > 런타임 유형 변경 > Python 3.10")
+        
         print(f"프로젝트 경로: {self.project_root}")
 
         # 필수 라이브러리 설치
