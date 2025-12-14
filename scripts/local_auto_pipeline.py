@@ -27,7 +27,7 @@ class LocalAutoPipeline:
     def __init__(self, mode: str = "fast", data_dir: Optional[str] = None):
         """
         Args:
-            mode: 실행 모드 ('fast' 또는 'full')
+            mode: 실행 모드 ('ultra_fast', 'fast', 'full')
             data_dir: 데이터 디렉토리 (None이면 자동)
         """
         self.mode = mode
@@ -40,7 +40,15 @@ class LocalAutoPipeline:
 
     def _get_config(self) -> Dict:
         """모드별 설정"""
-        if self.mode == "fast":
+        if self.mode == "ultra_fast":
+            return {
+                "data_sample_ratio": 0.05,  # 5% 데이터
+                "num_epochs": 10,
+                "batch_size": 128,
+                "eval_every": 20,
+                "save_every": 20,
+            }
+        elif self.mode == "fast":
             return {
                 "data_sample_ratio": 0.3,
                 "num_epochs": 50,
@@ -352,8 +360,8 @@ def main():
         "--mode",
         type=str,
         default="fast",
-        choices=["fast", "full"],
-        help="실행 모드 (fast: 빠른 테스트, full: 전체 학습)",
+        choices=["ultra_fast", "fast", "full"],
+        help="실행 모드 (ultra_fast: 1시간, fast: 2-3시간, full: 6-8시간)",
     )
     parser.add_argument("--data-dir", type=str, default=None, help="데이터 디렉토리 경로")
 

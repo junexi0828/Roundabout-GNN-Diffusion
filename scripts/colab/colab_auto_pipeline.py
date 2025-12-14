@@ -3,6 +3,7 @@ Colab 완전 자동화 파이프라인
 하나의 스크립트로 전체 프로세스 자동 실행
 
 사용법:
+    !python scripts/colab/colab_auto_pipeline.py --mode ultra_fast
     !python scripts/colab/colab_auto_pipeline.py --mode fast
     !python scripts/colab/colab_auto_pipeline.py --mode full
 """
@@ -39,7 +40,7 @@ class ColabAutoPipeline:
     ):
         """
         Args:
-            mode: 실행 모드 ('fast' 또는 'full')
+            mode: 실행 모드 ('ultra_fast', 'fast', 'full')
             drive_mount: Google Drive 마운트 여부
             data_dir: 데이터 디렉토리 (None이면 자동 감지)
             github_repo: GitHub 저장소 URL
@@ -96,7 +97,15 @@ class ColabAutoPipeline:
 
     def _get_config(self) -> Dict:
         """모드별 설정"""
-        if self.mode == "fast":
+        if self.mode == "ultra_fast":
+            return {
+                "data_sample_ratio": 0.05,  # 5% 데이터
+                "num_epochs": 10,
+                "batch_size": 128,
+                "eval_every": 20,
+                "save_every": 20,
+            }
+        elif self.mode == "fast":
             return {
                 "data_sample_ratio": 0.3,  # 30% 데이터만 사용
                 "num_epochs": 20,
@@ -858,8 +867,8 @@ def main():
         "--mode",
         type=str,
         default="fast",
-        choices=["fast", "full"],
-        help="실행 모드 (fast: 빠른 테스트, full: 전체 학습)",
+        choices=["ultra_fast", "fast", "full"],
+        help="실행 모드 (ultra_fast: 1시간, fast: 빠른 테스트, full: 전체 학습)",
     )
     parser.add_argument(
         "--no-drive", action="store_true", help="Google Drive 마운트 안 함"
