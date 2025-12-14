@@ -10,19 +10,19 @@ model:
   obs_steps: 30      # 유지
   pred_steps: 50     # 유지
 
-  # ⚡⚡ 초소형 모델
-  hidden_dim: 32     # 64 → 32 (계산량 75% 감소)
+  # 초창기 설정 (ADE 0.9m → 0.05m 수렴)
+  hidden_dim: 64     # 초창기: 64 (32는 너무 작음)
 
-  # ⚡⚡ Diffusion 스텝 최소화
-  num_diffusion_steps: 20  # 50 → 20 (학습 속도 60% 향상)
+  # 초창기 Diffusion 스텝
+  num_diffusion_steps: 50  # 초창기: 50 (20은 너무 적음)
 
   beta_start: 0.0001
   beta_end: 0.02
 
-  # ⚡⚡ 최소 Transformer
+  # 초창기 Transformer 설정
   denoiser:
-    num_layers: 1      # 2 → 1
-    num_heads: 2       # 4 → 2
+    num_layers: 2      # 초창기: 2 (1은 너무 얕음)
+    num_heads: 4       # 초창기: 4
     dropout: 0.1
 
   # ⚡⚡ 최소 인코더
@@ -40,15 +40,15 @@ model:
 data:
   data_dir: "data/processed"
 
-  # ⚡⚡ 배치 크기 최대화 (GPU 활용률)
-  batch_size: 128    # 64 → 128 (GPU에서 2배 빠름)
+  # 초창기 배치 크기
+  batch_size: 64    # 초창기: 64
 
   num_workers: 8     # 병렬 로딩 증가
   pin_memory: true
 
-  # ⚡⚡ 극소량 데이터 (5%)
+  # 초창기 데이터 설정
   use_sampling: true
-  sample_ratio: 0.05  # 30% → 5% (학습 시간 80% 단축)
+  sample_ratio: 0.3  # 초창기: 30% (5%는 너무 적음)
 
   train_ratio: 0.8    # 검증/테스트 줄이기
   val_ratio: 0.1
@@ -72,8 +72,8 @@ training:
   warmup_epochs: 1      # 3 → 1
   min_lr: 0.0001
 
-  # ⚡⚡ 에폭 대폭 감소
-  num_epochs: 10        # 50 → 10 (학습 시간 80% 단축)
+  # 초창기 에폭 설정
+  num_epochs: 20        # 초창기: 20 에폭 (그래프 기준)
 
   max_grad_norm: 1.0
 
