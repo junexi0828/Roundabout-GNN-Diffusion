@@ -636,7 +636,7 @@ class HybridGNNMID(nn.Module):
             elif graph_data is not None:
                 # 일반 GAT 사용 (ModuleList인 경우)
                 # HeteroGAT인 경우는 hetero_data가 필요하므로 여기서는 일반 GAT만 처리
-                
+
                 # Batch 객체인지 확인
                 if isinstance(graph_data, Batch):
                     x = graph_data.x
@@ -717,15 +717,9 @@ class HybridGNNMID(nn.Module):
                 # 그래프 레벨 특징 (평균 풀링)
                 if batch is not None:
                     # 배치별로 평균 풀링
-                    from torch_geometric.nn import global_mean_pool
-
-                    graph_embedding = global_mean_pool(
-                        x, batch
-                    )  # [batch_size, hidden_dim]
+                    graph_embedding = global_mean_pool(x, batch)  # [batch_size, hidden_dim]
                 else:
-                    graph_embedding = torch.mean(
-                        x, dim=0, keepdim=True
-                    )  # [1, hidden_dim]
+                    graph_embedding = torch.mean(x, dim=0, keepdim=True)  # [1, hidden_dim]
             else:
                 raise ValueError("graph_data or hetero_data required when use_gnn=True")
 
