@@ -49,11 +49,33 @@ class ColabAutoPipeline:
 
         # 경로 설정
         if IN_COLAB:
-            self.project_root = Path("/content/Roundabout_AI")
+            # Colab에서 현재 작업 디렉토리 자동 감지
+            current_dir = Path.cwd()
+            # 가능한 프로젝트 디렉토리 확인
+            possible_roots = [
+                current_dir,
+                Path("/content/Roundabout_AI"),
+                Path("/content/Roundabout-GNN-Diffusion"),
+            ]
+
+            self.project_root = None
+            for root in possible_roots:
+                if root.exists() and (root / "src").exists() and (root / "scripts").exists():
+                    self.project_root = root
+                    break
+
+            if self.project_root is None:
+                # 기본값 사용
+                self.project_root = current_dir if (current_dir / "src").exists() else Path("/content/Roundabout_AI")
+
             self.drive_root = Path("/content/drive/MyDrive")
         else:
-            self.project_root = Path(__file__).parent.parent
+            self.project_root = Path(__file__).parent.parent.parent
             self.drive_root = Path.home() / "Google Drive"
+
+        # sys.path에 프로젝트 루트 추가
+        if str(self.project_root) not in sys.path:
+            sys.path.insert(0, str(self.project_root))
 
         self.data_dir = (
             Path(data_dir) if data_dir else self.drive_root / "Roundabout_AI_Data"
@@ -143,10 +165,13 @@ class ColabAutoPipeline:
 
     def clone_repository(self):
         """2. GitHub 저장소 클론"""
-        if self.project_root.exists() and (self.project_root / ".git").exists():
-            print(f"✓ 저장소 이미 존재: {self.project_root}")
-            # 최신 버전으로 업데이트
-            subprocess.run(["git", "pull"], cwd=self.project_root, check=False)
+        # 이미 클론되어 있고 src 디렉토리가 있으면 건너뛰기
+        if self.project_root.exists() and (self.project_root / "src").exists():
+            print(f"✓ 프로젝트 이미 존재: {self.project_root}")
+            if (self.project_root / ".git").exists():
+                # 최신 버전으로 업데이트
+                print("  최신 버전으로 업데이트 중...")
+                subprocess.run(["git", "pull"], cwd=self.project_root, check=False)
             return
 
         print(f"\n[GitHub 저장소 클론]")
@@ -239,31 +264,36 @@ class ColabAutoPipeline:
         print("\n[데이터 전처리]")
 
         # 전처리 스크립트 실행
-        preprocess_script = self.project_root / "scripts" / "preprocess_sdd.py"
+        preprocess_script = self.project_root / "scripts" / "data" / "preprocess_sdd.py"
 
         if not preprocess_script.exists():
             print("⚠️  전처리 스크립트 없음, 기본 전처리 수행")
             # 간단한 전처리
-            from src.data_processing.preprocessor import TrajectoryPreprocessor
-            from src.integration.sdd_data_adapter import SDDDataAdapter
-            import pandas as pd
+            try:
+                from src.data_processing.preprocessor import TrajectoryPreprocessor
+                from src.integration.sdd_data_adapter import SDDDataAdapter
+                import pandas as pd
 
-            # 데이터 로드 및 전처리
-            adapter = SDDDataAdapter()
-            data_path_obj = Path(data_path) if data_path else None
-            windows = adapter.load_and_preprocess(data_path_obj)
+                # 데이터 로드 및 전처리
+                adapter = SDDDataAdapter()
+                data_path_obj = Path(data_path) if data_path else None
+                windows = adapter.load_and_preprocess(data_path_obj)
 
-            # 저장
-            output_dir = self.project_root / "data" / "processed"
-            output_dir.mkdir(parents=True, exist_ok=True)
+                # 저장
+                output_dir = self.project_root / "data" / "processed"
+                output_dir.mkdir(parents=True, exist_ok=True)
 
-            import pickle
+                import pickle
 
-            with open(output_dir / "sdd_windows.pkl", "wb") as f:
-                pickle.dump(windows, f)
+                with open(output_dir / "sdd_windows.pkl", "wb") as f:
+                    pickle.dump(windows, f)
 
-            print(f"✓ 전처리 완료: {len(windows)}개 윈도우")
-            return str(output_dir)
+                print(f"✓ 전처리 완료: {len(windows)}개 윈도우")
+                return str(output_dir)
+            except Exception as e:
+                print(f"⚠️  전처리 실패: {e}")
+                print("  이미 전처리된 데이터 사용")
+                return data_path
 
         # 전처리 스크립트 실행
         result = subprocess.run(
@@ -285,7 +315,7 @@ class ColabAutoPipeline:
         print(f"\n[베이스라인 학습: {baseline_name.upper()}]")
 
         if baseline_name == "a3tgcn":
-            train_script = self.project_root / "scripts" / "train_a3tgcn.py"
+            train_script = self.project_root / "scripts" / "training" / "train_a3tgcn.py"
             config_file = self.project_root / "configs" / "a3tgcn_config.yaml"
         else:
             print(f"⚠️  알 수 없는 베이스라인: {baseline_name}")
@@ -379,7 +409,7 @@ class ColabAutoPipeline:
         print(f"  Diffusion 스텝: {config['model']['num_diffusion_steps']}")
 
         # 학습 실행
-        train_script = self.project_root / "scripts" / "train_mid.py"
+        train_script = self.project_root / "scripts" / "training" / "train_mid.py"
 
         print("\n[학습 시작]")
         print("=" * 80)
@@ -408,7 +438,7 @@ class ColabAutoPipeline:
         print("\n[베이스라인 비교 평가]")
 
         # 비교 평가 스크립트 실행
-        compare_script = self.project_root / "scripts" / "compare_baselines.py"
+        compare_script = self.project_root / "scripts" / "evaluation" / "compare_baselines.py"
 
         if not compare_script.exists():
             print("⚠️  비교 평가 스크립트 없음")
@@ -451,7 +481,7 @@ class ColabAutoPipeline:
         print("\n[결과 시각화]")
 
         # 시각화 스크립트 실행
-        viz_script = self.project_root / "scripts" / "visualize_results.py"
+        viz_script = self.project_root / "scripts" / "utils" / "visualize_results.py"
 
         if not viz_script.exists():
             print("⚠️  시각화 스크립트 없음")
