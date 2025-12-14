@@ -13,8 +13,8 @@ model:
   # ⚡⚡ 초소형 모델
   hidden_dim: 32     # 64 → 32 (계산량 75% 감소)
 
-  # ⚡⚡ Diffusion 스텝 최소화
-  num_diffusion_steps: 20  # 50 → 20 (학습 속도 60% 향상)
+  # ⚡⚡ Diffusion 스텝 최소화 (1분 내 완료용)
+  num_diffusion_steps: 10  # 20 → 10 (1분 내 완료)
 
   beta_start: 0.0001
   beta_end: 0.02
@@ -40,15 +40,15 @@ model:
 data:
   data_dir: "data/processed"
 
-  # ⚡⚡ 배치 크기 최대화 (GPU 활용률)
-  batch_size: 128    # 64 → 128 (GPU에서 2배 빠름)
+  # ⚡⚡ 배치 크기 최대화 (1분 내 완료용)
+  batch_size: 256    # 128 → 256 (더 빠른 처리)
 
   num_workers: 0     # macOS multiprocessing 문제 방지 (CPU 사용 시 0 권장)
   pin_memory: false  # CPU 사용 시 불필요
 
-  # ⚡⚡ 극소량 데이터 (5%)
+  # ⚡⚡ 극소량 데이터 (1% - 1분 내 완료용)
   use_sampling: true
-  sample_ratio: 0.05  # 30% → 5% (학습 시간 80% 단축)
+  sample_ratio: 0.01  # 5% → 1% (1분 내 완료)
 
   train_ratio: 0.8    # 검증/테스트 줄이기
   val_ratio: 0.1
@@ -72,8 +72,8 @@ training:
   warmup_epochs: 1      # 3 → 1
   min_lr: 0.0001
 
-  # ⚡⚡ 에폭 대폭 감소
-  num_epochs: 10        # 50 → 10 (학습 시간 80% 단축)
+  # ⚡⚡ 에폭 최소화 (1분 내 완료용)
+  num_epochs: 1         # 10 → 1 (1분 내 완료)
 
   max_grad_norm: 1.0
 
@@ -104,8 +104,8 @@ evaluation:
   ddim_steps: 2
   ddim_eta: 0.0
 
-  # ⚡⚡ 평가 빈도 대폭 감소
-  eval_every: 20       # 5 → 20 (거의 안 함)
+  # ⚡⚡ 평가 최소화 (1분 내 완료용)
+  eval_every: 1        # 매 에폭마다 (1 에폭만 실행)
 
 # ============================================================================
 # 로깅 (최소화)
@@ -114,8 +114,8 @@ logging:
   log_dir: "runs/mid_ultra_fast"
   save_dir: "checkpoints/mid_ultra_fast"
 
-  # ⚡⚡ 저장 최소화
-  save_every: 20       # 10 → 20
+  # ⚡⚡ 저장 최소화 (1분 내 완료용)
+  save_every: 1        # 매 에폭마다 저장 (1 에폭만)
 
   tensorboard: true
   log_images: false
@@ -138,8 +138,10 @@ device:
 ultra_fast_mode:
   enabled: true
 
-  # ⚡⚡ 추가 최적화
-  skip_validation_until_epoch: 8   # 8 에폭까지 검증 스킵
+  # ⚡⚡ 추가 최적화 (1분 내 완료용)
+  skip_validation_until_epoch: 1   # 1 에폭까지 검증 스킵 (1 에폭만 실행하므로 사실상 스킵)
+  max_train_batches: 10            # 학습 배치 10개만 (1분 내 완료)
+  max_val_batches: 5               # 검증 배치 5개만 (1분 내 완료)
   cache_data: true                  # 데이터 캐싱
   deterministic: false              # 속도 우선
 

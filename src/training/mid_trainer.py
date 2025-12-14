@@ -123,10 +123,21 @@ class MIDTrainer:
         self.model.train()
         total_loss = 0.0
         num_batches = 0
-
-        pbar = tqdm(self.train_loader, desc=f"Epoch {epoch+1}")
+        
+        # Ultra fast 모드: 학습 배치 최소화
+        max_train_batches = self.config.get('max_train_batches', None)
+        if max_train_batches is None:
+            ultra_fast_config = self.config.get('ultra_fast_mode', {})
+            if ultra_fast_config.get('enabled', False):
+                max_train_batches = ultra_fast_config.get('max_train_batches', 10)  # 10개 배치만 학습 (1분 내 완료용)
+        
+        total_batches = min(len(self.train_loader), max_train_batches) if max_train_batches else len(self.train_loader)
+        pbar = tqdm(self.train_loader, desc=f"Epoch {epoch+1}", total=total_batches)
 
         for batch_idx, batch in enumerate(pbar):
+            # Ultra fast 모드: 배치 수 제한
+            if max_train_batches and batch_idx >= max_train_batches:
+                break
             # 데이터 준비
             if isinstance(batch, dict):
                 # MID 모델은 x, y 좌표만 필요하므로 obs_trajectory 우선 사용
@@ -299,9 +310,19 @@ class MIDTrainer:
         all_predictions = []
         all_ground_truths = []
         num_batches = 0
+        
+        # Ultra fast 모드: 검증 최소화
+        max_val_batches = self.config.get('max_val_batches', None)
+        if max_val_batches is None and self.config.get('ultra_fast_mode', {}).get('enabled', False):
+            max_val_batches = 5  # 5개 배치만 검증 (1분 내 완료용)
 
         with torch.no_grad():
-            for batch in tqdm(self.val_loader, desc="Validation"):
+            val_iter = iter(self.val_loader)
+            val_count = 0
+            for batch in tqdm(val_iter, desc="Validation", total=min(len(self.val_loader), max_val_batches) if max_val_batches else len(self.val_loader)):
+                if max_val_batches and val_count >= max_val_batches:
+                    break
+                val_count += 1
                 # 데이터 준비
                 if isinstance(batch, dict):
                     # MID 모델은 x, y 좌표만 필요하므로 obs_trajectory 우선 사용
@@ -355,27 +376,29 @@ class MIDTrainer:
                     loss = self.criterion(pred_noise, noise)
                     total_loss += loss.item()
 
-                # 샘플링 (평가용)
-                if future_data is not None:
-                    # HybridGNNMID는 graph_data를 받지만, MIDModel은 받지 않음
-                    if hasattr(self.model, 'use_gnn') and self.model.use_gnn and graph_data is not None:
-                        samples = self.model.sample(
-                            graph_data=graph_data,
-                            obs_trajectory=obs_data,
-                            num_samples=20,
-                            ddim_steps=2
-                        )
-                    else:
-                        # MIDModel (graph_data 없이)
-                        samples = self.model.sample(
-                            obs_trajectory=obs_data,
-                            num_samples=20,
-                            ddim_steps=2
-                        )
-                    # 최소 ADE 샘플 선택
-                    best_samples = samples[0]  # 첫 번째 샘플 사용 (실제로는 최소 ADE)
-                    all_predictions.append(best_samples.cpu().numpy())
-                    all_ground_truths.append(future_data.cpu().numpy())
+                    # 샘플링 (평가용) - Ultra fast 모드에서는 최소화
+                    ultra_fast_config = self.config.get('ultra_fast_mode', {})
+                    if not ultra_fast_config.get('enabled', False) or val_count <= 2:  # 처음 2개 배치만 샘플링
+                        if future_data is not None:
+                            # HybridGNNMID는 graph_data를 받지만, MIDModel은 받지 않음
+                            if hasattr(self.model, 'use_gnn') and self.model.use_gnn and graph_data is not None:
+                                samples = self.model.sample(
+                                    graph_data=graph_data,
+                                    obs_trajectory=obs_data,
+                                    num_samples=5,  # Ultra fast: 20 → 5
+                                    ddim_steps=1    # Ultra fast: 2 → 1
+                                )
+                            else:
+                                # MIDModel (graph_data 없이)
+                                samples = self.model.sample(
+                                    obs_trajectory=obs_data,
+                                    num_samples=5,  # Ultra fast: 20 → 5
+                                    ddim_steps=1    # Ultra fast: 2 → 1
+                                )
+                            # 최소 ADE 샘플 선택
+                            best_samples = samples[0]  # 첫 번째 샘플 사용 (실제로는 최소 ADE)
+                            all_predictions.append(best_samples.cpu().numpy())
+                            all_ground_truths.append(future_data.cpu().numpy())
 
                 num_batches += 1
 
@@ -424,9 +447,15 @@ class MIDTrainer:
             train_loss = self.train_epoch(epoch)
             self.train_losses.append(train_loss)
 
-            # 검증
-            val_metrics = self.validate(epoch)
-            val_loss = val_metrics['val_loss']
+            # 검증 (ultra_fast 모드에서는 최소화)
+            skip_validation = self.config.get('ultra_fast_mode', {}).get('skip_validation_until_epoch', 0)
+            if epoch < skip_validation:
+                # 더미 검증 메트릭
+                val_metrics = {'val_loss': train_loss, 'ade': 0.0, 'fde': 0.0}
+                val_loss = train_loss
+            else:
+                val_metrics = self.validate(epoch)
+                val_loss = val_metrics['val_loss']
             self.val_losses.append(val_loss)
 
             if 'ade' in val_metrics:

@@ -43,11 +43,11 @@ class LocalAutoPipeline:
         """모드별 설정"""
         if self.mode == "ultra_fast":
             return {
-                "data_sample_ratio": 0.05,  # 5% 데이터
-                "num_epochs": 10,
-                "batch_size": 128,
-                "eval_every": 20,
-                "save_every": 20,
+                "data_sample_ratio": 0.01,  # 1% 데이터 (1분 내 완료)
+                "num_epochs": 1,  # 1 에폭만
+                "batch_size": 256,  # 더 큰 배치
+                "eval_every": 1,
+                "save_every": 1,
             }
         elif self.mode == "fast":
             return {
