@@ -847,50 +847,57 @@ class ColabAutoPipeline:
 
         # ========================================================================
         # 베이스라인 비교 (A3TGCN, Trajectron++)
+        # ultra_fast 모드에서는 스킵 (torch-geometric-temporal 미설치)
         # ========================================================================
 
-        # 베이스라인 학습 (A3TGCN)
-        try:
-            a3tgcn_success = self.step(
-                7,
-                10,
-                "베이스라인 학습 (A3TGCN)",
-                lambda: self.train_baseline(processed_dir, "a3tgcn"),
-            )
-            if not a3tgcn_success:
-                print("⚠️  A3TGCN 학습 실패했지만 계속 진행합니다...")
-        except Exception as e:
-            print(f"⚠️  A3TGCN 학습 실패: {e}")
+        if self.mode != "ultra_fast":
+            # 베이스라인 학습 (A3TGCN)
+            try:
+                a3tgcn_success = self.step(
+                    7,
+                    10,
+                    "베이스라인 학습 (A3TGCN)",
+                    lambda: self.train_baseline(processed_dir, "a3tgcn"),
+                )
+                if not a3tgcn_success:
+                    print("⚠️  A3TGCN 학습 실패했지만 계속 진행합니다...")
+            except Exception as e:
+                print(f"⚠️  A3TGCN 학습 실패: {e}")
 
-        # 베이스라인 학습 (Trajectron++)
-        try:
-            trajectron_success = self.step(
-                8,
-                10,
-                "베이스라인 학습 (Trajectron++)",
-                lambda: self.train_baseline(processed_dir, "trajectron"),
-            )
-            if not trajectron_success:
-                print("⚠️  Trajectron++ 학습 실패했지만 계속 진행합니다...")
-        except Exception as e:
-            print(f"⚠️  Trajectron++ 학습 실패: {e}")
+            # 베이스라인 학습 (Trajectron++)
+            try:
+                trajectron_success = self.step(
+                    8,
+                    10,
+                    "베이스라인 학습 (Trajectron++)",
+                    lambda: self.train_baseline(processed_dir, "trajectron"),
+                )
+                if not trajectron_success:
+                    print("⚠️  Trajectron++ 학습 실패했지만 계속 진행합니다...")
+            except Exception as e:
+                print(f"⚠️  Trajectron++ 학습 실패: {e}")
 
-        # 비교 평가
-        try:
-            self.step(9, 10, "베이스라인 비교 평가", self.compare_baselines)
-        except Exception as e:
-            print(f"⚠️  비교 평가 실패: {e}")
+            # 비교 평가
+            try:
+                self.step(9, 10, "베이스라인 비교 평가", self.compare_baselines)
+            except Exception as e:
+                print(f"⚠️  비교 평가 실패: {e}")
+        else:
+            print("\n⚠️  ultra_fast 모드: 베이스라인 학습 스킵 (torch-geometric-temporal 미설치)")
+            print("  A3TGCN과 Trajectron++ 학습을 건너뜁니다.")
         # ========================================================================
 
         # 시각화
+        step_num = 10 if self.mode != "ultra_fast" else 7
         try:
-            self.step(10, 10, "결과 시각화", self.visualize_results)
+            self.step(step_num, step_num, "결과 시각화", self.visualize_results)
         except Exception as e:
             print(f"⚠️  시각화 실패: {e}")
 
         # 결과 저장
+        step_num += 1
         try:
-            self.step(11, 11, "결과 저장", self.save_results)
+            self.step(step_num, step_num, "결과 저장", self.save_results)
         except Exception as e:
             print(f"⚠️  결과 저장 실패: {e}")
 

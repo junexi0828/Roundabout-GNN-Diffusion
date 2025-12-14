@@ -3,17 +3,30 @@ Trajectron++ 통합 가이드 및 래퍼
 trajdata를 통한 INTERACTION Dataset 로딩 및 Trajectron++ 모델 사용
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union, TYPE_CHECKING
 from pathlib import Path
 import warnings
 
 # Trajectron++는 별도 설치가 필요하므로 선택적 import
+if TYPE_CHECKING:
+    # 타입 체크 시에만 import (실제 런타임에는 조건부)
+    try:
+        from trajdata import UnifiedDataset, AgentBatch, SceneBatch
+    except ImportError:
+        UnifiedDataset = Any
+        AgentBatch = Any
+        SceneBatch = Any
+
 try:
     from trajdata import UnifiedDataset, AgentBatch, SceneBatch
 
     TRAJDATA_AVAILABLE = True
 except ImportError:
     TRAJDATA_AVAILABLE = False
+    # 타입 힌트용 더미 클래스
+    UnifiedDataset = Any
+    AgentBatch = Any
+    SceneBatch = Any
     warnings.warn(
         "trajdata가 설치되지 않았습니다. Trajectron++ 통합을 사용할 수 없습니다."
     )

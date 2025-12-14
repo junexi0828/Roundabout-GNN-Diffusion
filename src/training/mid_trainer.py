@@ -164,21 +164,38 @@ class MIDTrainer:
                         x_t = self.model.q_sample(future_data, t, noise)
 
                         # 노이즈 예측
-                        pred_noise = self.model(
-                            graph_data=graph_data,
-                            obs_trajectory=obs_data,
-                            future_trajectory=None,
-                            t=t
-                        )
+                        # 모델이 GNN을 사용하는지 확인
+                        if hasattr(self.model, 'use_gnn') and self.model.use_gnn:
+                            pred_noise = self.model(
+                                graph_data=graph_data,
+                                hetero_data=hetero_graph if 'hetero_graph' in locals() else None,
+                                obs_trajectory=obs_data,
+                                future_trajectory=None,
+                                t=t,
+                                x_t=x_t
+                            )
+                        else:
+                            # GNN 없는 모델 (MIDModel)
+                            pred_noise = self.model(
+                                obs_trajectory=obs_data,
+                                future_trajectory=None,
+                                t=t,
+                                x_t=x_t
+                            )
 
                         # Loss 계산 (예측 노이즈 vs 실제 노이즈)
                         loss = self.criterion(pred_noise, noise)
                     else:
                         # 더미 forward (실제로는 future_data 필요)
-                        pred_noise = self.model(
-                            graph_data=graph_data,
-                            obs_trajectory=obs_data
-                        )
+                        if hasattr(self.model, 'use_gnn') and self.model.use_gnn:
+                            pred_noise = self.model(
+                                graph_data=graph_data,
+                                obs_trajectory=obs_data
+                            )
+                        else:
+                            pred_noise = self.model(
+                                obs_trajectory=obs_data
+                            )
                         loss = torch.tensor(0.0, device=self.device)
 
                 # Backward
@@ -186,6 +203,7 @@ class MIDTrainer:
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
             else:
+                # Mixed Precision 미사용
                 if future_data is not None:
                     # 타임스텝 랜덤 샘플링
                     batch_size = future_data.size(0)
@@ -194,25 +212,39 @@ class MIDTrainer:
                         (batch_size,), device=self.device
                     )
 
-                    # Forward diffusion
+                    # Forward diffusion (노이즈 추가)
                     noise = torch.randn_like(future_data)
                     x_t = self.model.q_sample(future_data, t, noise)
 
-                    # 노이즈 예측
-                    pred_noise = self.model(
-                        graph_data=graph_data,
-                        obs_trajectory=obs_data,
-                        future_trajectory=None,
-                        t=t
-                    )
-
+                    # 노이즈 예측 (GNN 사용 여부에 따라 분기)
+                    if hasattr(self.model, 'use_gnn') and self.model.use_gnn:
+                        pred_noise = self.model(
+                            graph_data=graph_data,
+                            obs_trajectory=obs_data,
+                            future_trajectory=None,
+                            t=t,
+                            x_t=x_t
+                        )
+                    else:
+                        pred_noise = self.model(
+                            obs_trajectory=obs_data,
+                            future_trajectory=None,
+                            t=t,
+                            x_t=x_t
+                        )
                     # Loss 계산
                     loss = self.criterion(pred_noise, noise)
                 else:
-                    pred_noise = self.model(
-                        graph_data=graph_data,
-                        obs_trajectory=obs_data
-                    )
+                    # 더미 forward (실제로는 future_data 필요)
+                    if hasattr(self.model, 'use_gnn') and self.model.use_gnn:
+                        pred_noise = self.model(
+                            graph_data=graph_data,
+                            obs_trajectory=obs_data
+                        )
+                    else:
+                        pred_noise = self.model(
+                            obs_trajectory=obs_data
+                        )
                     loss = torch.tensor(0.0, device=self.device)
 
                 loss.backward()

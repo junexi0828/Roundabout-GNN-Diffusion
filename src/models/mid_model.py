@@ -399,7 +399,10 @@ class MIDModel(nn.Module):
         obs_trajectory: torch.Tensor,
         future_trajectory: Optional[torch.Tensor] = None,
         t: Optional[torch.Tensor] = None,
-        x_t: Optional[torch.Tensor] = None
+        x_t: Optional[torch.Tensor] = None,
+        graph_data: Optional[Data] = None,  # GNN 미사용 시 무시
+        hetero_data: Optional[HeteroData] = None,  # GNN 미사용 시 무시
+        **kwargs  # 추가 인수 무시
     ) -> torch.Tensor:
         """
         Forward pass (학습용)
