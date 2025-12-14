@@ -1,0 +1,101 @@
+# MID (Motion Indeterminacy Diffusion) 모델 설정
+
+# 모델 설정
+model:
+  name: "mid"
+  obs_steps: 30        # 관측 스텝 수 (3초, 10Hz)
+  pred_steps: 50       # 예측 스텝 수 (5초, 10Hz)
+  hidden_dim: 128      # 은닉층 차원
+  num_diffusion_steps: 100  # Diffusion 스텝 수
+
+  # GNN 통합
+  use_gnn: true        # GNN 사용 여부
+  node_features: 9    # 노드 특징 차원 (x, y, vx, vy, ax, ay, psi, width, length)
+
+  # Encoder 설정
+  use_transformer_encoder: false  # Transformer 인코더 사용 (기본: LSTM)
+
+  # Denoiser 설정
+  num_layers: 4        # Transformer 레이어 수
+  num_heads: 8         # 어텐션 헤드 수
+  dropout: 0.1
+
+# Diffusion 설정
+diffusion:
+  beta_start: 0.0001   # Beta 시작값
+  beta_end: 0.02       # Beta 종료값
+  schedule: "linear"   # Beta 스케줄 (linear/cosine)
+
+# 데이터 설정
+data:
+  data_dir: "data/processed"
+  batch_size: 32
+  num_workers: 2
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+
+# 학습 설정
+training:
+  # Optimizer
+  optimizer: "adamw"
+  learning_rate: 0.001
+  weight_decay: 1e-5
+  betas: [0.9, 0.999]
+
+  # Scheduler
+  scheduler: "reduce_on_plateau"
+  min_lr: 1e-6
+
+  # 학습 파라미터
+  num_epochs: 100
+  max_grad_norm: 1.0
+
+  # Early Stopping
+  early_stopping:
+    patience: 15
+    min_delta: 0.001
+
+  # 손실 함수
+  loss:
+    type: "mse"        # 노이즈 예측용 MSE
+
+  # Mixed Precision (빠른 학습)
+  use_amp: true        # Automatic Mixed Precision
+
+# 평가 설정
+evaluation:
+  # 평가 지표
+  metrics:
+    - "ade"      # Average Displacement Error
+    - "fde"      # Final Displacement Error
+    - "diversity" # 다중 모달리티 다양성
+
+  # 샘플링 설정
+  num_samples: 20      # 평가 시 생성 궤적 수
+  sampling_method: "ddim"  # 빠른 샘플링
+  ddim_steps: 2        # DDIM 스텝 수 (50x 가속)
+
+  # 평가 주기
+  eval_every: 5        # 5 에폭마다
+
+# 로깅 및 저장
+logging:
+  log_dir: "runs/mid"
+  save_dir: "checkpoints/mid"
+  save_every: 10       # 10 에폭마다 체크포인트
+
+  # TensorBoard
+  tensorboard: true
+  log_images: true     # 궤적 시각화
+  log_every: 100       # 100 스텝마다
+
+# 디바이스 설정
+device:
+  use_cuda: true
+  device_id: 0
+
+# 재현성
+seed: 42
+deterministic: false   # 속도 우선
+

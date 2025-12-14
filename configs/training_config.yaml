@@ -1,0 +1,55 @@
+# 학습 설정 파일
+
+# 모델 설정
+model:
+  name: "a3tgcn"  # "a3tgcn" 또는 "trajectron++"
+  node_features: 9
+  hidden_channels: 32
+  num_layers: 2
+  periods: 30  # 관측 윈도우 길이
+  pred_steps: 50  # 예측 스텝 수
+
+# 데이터 설정
+data:
+  data_dir: "data/processed"
+  batch_size: 32
+  num_workers: 0
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+
+# 학습 설정
+training:
+  optimizer: "adam"  # "adam", "adamw", "sgd"
+  learning_rate: 0.001
+  weight_decay: 0.00001
+  momentum: 0.9  # SGD용
+
+  # Learning Rate Scheduler
+  scheduler: "reduce_on_plateau"  # "reduce_on_plateau", "step", "cosine", null
+  scheduler_step_size: 30  # step scheduler용
+  scheduler_gamma: 0.1  # step scheduler용
+
+  # 손실 함수
+  loss: "mse"  # "mse", "l1", "smooth_l1", "nll"
+
+  # 학습 파라미터
+  num_epochs: 100
+  max_grad_norm: 1.0  # Gradient clipping
+
+  # Early Stopping
+  early_stopping:
+    patience: 10
+    min_delta: 0.001
+
+# 로깅 및 저장
+logging:
+  log_dir: "runs"
+  save_dir: "checkpoints"
+  save_every: 10  # N 에폭마다 체크포인트 저장
+
+# 디바이스 설정
+device:
+  use_cuda: true
+  device_id: 0  # GPU ID (멀티 GPU인 경우)
+

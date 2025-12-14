@@ -1,0 +1,146 @@
+# MID Diffusion 모델 설정 (빠른 학습 최적화)
+
+# 모델 설정
+model:
+  name: "mid_diffusion"
+  type: "ddim"  # DDPM보다 빠른 샘플링
+
+  # Diffusion 파라미터 (최적화)
+  diffusion:
+    timesteps: 100        # 원본: 1000 (10배 감소)
+    sampling_steps: 10    # DDIM 빠른 샘플링
+    beta_schedule: "linear"
+    beta_start: 0.0001
+    beta_end: 0.02
+
+  # 인코더 (기존 GNN 활용)
+  encoder:
+    type: "heterogat"
+    node_features: 9
+    hidden_channels: 64   # 원본: 256 (4배 감소)
+    num_layers: 2         # 원본: 6 (3배 감소)
+    num_heads: 4          # 원본: 8 (2배 감소)
+    dropout: 0.2
+
+  # Diffusion 네트워크
+  diffusion_net:
+    hidden_dim: 64        # 경량화
+    time_embed_dim: 32    # 원본: 128
+    num_layers: 3         # 원본: 6
+    dropout: 0.2
+
+  # 출력 설정
+  output:
+    pred_steps: 50        # 예측 스텝 (5초, 10Hz)
+    coordinate_dim: 2     # (x, y)
+    num_samples: 20       # 생성할 궤적 수
+
+# 데이터 설정
+data:
+  data_dir: "data/processed"
+  batch_size: 64          # 원본: 32 (2배 증가)
+  num_workers: 4
+
+  # 빠른 실험용 샘플링
+  use_sampling: true
+  sample_ratio: 0.3       # 30%만 사용 (초기 실험)
+
+  # 데이터 분할
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+
+  # 증강 (선택)
+  augmentation:
+    enabled: false        # 빠른 학습 시 비활성화
+    rotation: false
+    flip: false
+
+# 학습 설정
+training:
+  # Optimizer
+  optimizer: "adamw"
+  learning_rate: 3e-4     # 원본: 1e-4 (3배 증가)
+  weight_decay: 1e-4
+  betas: [0.9, 0.999]
+
+  # Scheduler
+  scheduler: "cosine"
+  warmup_epochs: 5        # 원본: 10
+  min_lr: 1e-6
+
+  # 학습 파라미터
+  num_epochs: 100         # 원본: 200 (절반)
+  max_grad_norm: 1.0
+
+  # Early Stopping
+  early_stopping:
+    patience: 15          # 원본: 20
+    min_delta: 0.001
+
+  # 손실 함수
+  loss:
+    type: "mse"           # Diffusion용 간단한 MSE
+    weight_position: 1.0
+    weight_velocity: 0.5  # 속도 일관성
+
+  # Mixed Precision (빠른 학습)
+  use_amp: true           # Automatic Mixed Precision
+  gradient_checkpointing: false  # 메모리 충분하면 비활성화
+
+# 평가 설정
+evaluation:
+  # 평가 지표
+  metrics:
+    - "ade"      # Average Displacement Error
+    - "fde"      # Final Displacement Error
+    - "nll"      # Negative Log-Likelihood
+
+  # 샘플링 설정
+  num_samples: 20         # 평가 시 생성 궤적 수
+  sampling_method: "ddim" # 빠른 샘플링
+
+  # 평가 주기
+  eval_every: 5           # 5 에폭마다
+
+# 로깅 및 저장
+logging:
+  log_dir: "runs/diffusion"
+  save_dir: "checkpoints/diffusion"
+  save_every: 10          # 10 에폭마다 체크포인트
+
+  # TensorBoard
+  tensorboard: true
+  log_images: true        # 궤적 시각화
+  log_every: 100          # 100 스텝마다
+
+  # Wandb (선택)
+  use_wandb: false
+  wandb_project: "roundabout-diffusion"
+
+# 디바이스 설정
+device:
+  use_cuda: true
+  device_id: 0
+
+  # 멀티 GPU (선택)
+  multi_gpu: false
+  gpu_ids: [0]
+
+# 빠른 학습 모드 (실험용)
+fast_mode:
+  enabled: true
+
+  # 추가 최적화
+  reduce_val_frequency: true  # 검증 빈도 감소
+  skip_test: true             # 테스트 스킵
+  cache_data: true            # 데이터 캐싱
+
+  # 디버그
+  debug_mode: false
+  max_batches_per_epoch: null  # null이면 전체, 숫자면 제한
+
+# 재현성
+seed: 42
+deterministic: false      # 속도 우선
+

@@ -1,0 +1,133 @@
+# MID 표준 학습 설정 (Standard Training Configuration)
+# 성능과 학습 시간의 균형을 맞춘 설정
+
+# ============================================================================
+# 모델 설정
+# ============================================================================
+model:
+  name: "mid_standard"
+
+  obs_steps: 30
+  pred_steps: 50
+
+  # 표준 설정 (성능 우선)
+  hidden_dim: 128              # 균형잡힌 용량
+  num_diffusion_steps: 100     # 충분한 diffusion steps
+
+  beta_start: 0.0001
+  beta_end: 0.02
+
+  denoiser:
+    num_layers: 4              # 충분한 표현력
+    num_heads: 8
+    dropout: 0.1
+
+  encoder:
+    type: "lstm"
+    num_layers: 2
+    use_transformer: false
+
+  use_gnn: true
+  gnn:
+    num_layers: 2
+    heads: 4
+
+# ============================================================================
+# 데이터 설정
+# ============================================================================
+data:
+  data_dir: "data/processed"
+
+  batch_size: 32               # 표준 배치 크기
+  num_workers: 4
+  pin_memory: true
+
+  # 전체 데이터 사용
+  use_sampling: false
+  sample_ratio: 1.0
+
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+
+  augmentation:
+    enabled: true              # 데이터 증강 활성화
+
+# ============================================================================
+# 학습 설정
+# ============================================================================
+training:
+  optimizer: "adamw"
+  learning_rate: 0.0001        # 안정적인 학습률
+  weight_decay: 0.0001
+
+  scheduler: "cosine"
+  warmup_epochs: 10
+  min_lr: 0.00001
+
+  num_epochs: 100              # 충분한 학습
+  max_grad_norm: 1.0
+
+  early_stopping:
+    patience: 20
+    min_delta: 0.0005
+
+  loss:
+    type: "mse"
+    weight_position: 1.0
+
+  use_amp: true                # Mixed Precision 활성화
+  gradient_checkpointing: false
+
+# ============================================================================
+# 평가 설정
+# ============================================================================
+evaluation:
+  metrics:
+    - "ade"
+    - "fde"
+
+  num_samples: 20              # 충분한 샘플 수
+  ddim_steps: 2
+  ddim_eta: 0.0
+
+  eval_every: 2                # 자주 평가
+
+# ============================================================================
+# 로깅 및 저장
+# ============================================================================
+logging:
+  log_dir: "runs/mid_standard"
+  save_dir: "checkpoints/mid_standard"
+  save_every: 5
+
+  tensorboard: true
+  log_images: true
+  log_every: 100
+
+  use_wandb: false
+
+# ============================================================================
+# 디바이스 설정
+# ============================================================================
+device:
+  use_cuda: true
+  device_id: 0
+  multi_gpu: false
+
+# ============================================================================
+# 기타 설정
+# ============================================================================
+fast_mode:
+  enabled: false
+  reduce_val_frequency: false
+  skip_test: false
+  cache_data: true
+
+seed: 42
+deterministic: false
+
+# ============================================================================
+# 예상 학습 시간: 12-15시간
+# 예상 성능: 95-100%
+# ============================================================================

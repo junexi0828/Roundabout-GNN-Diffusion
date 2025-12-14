@@ -1,0 +1,121 @@
+# MID Diffusion 모델 설정 (전체 학습용 - 최고 성능)
+
+# 모델 설정
+model:
+  name: "mid_diffusion"
+  type: "ddim"
+
+  # Diffusion 파라미터 (성능 우선)
+  diffusion:
+    timesteps: 200        # 빠른 학습과 성능의 균형
+    sampling_steps: 20    # 더 정확한 샘플링
+    beta_schedule: "cosine"  # 더 나은 스케줄
+    beta_start: 0.0001
+    beta_end: 0.02
+
+  # 인코더
+  encoder:
+    type: "heterogat"
+    node_features: 9
+    hidden_channels: 128  # 더 큰 용량
+    num_layers: 3
+    num_heads: 8
+    dropout: 0.1
+
+  # Diffusion 네트워크
+  diffusion_net:
+    hidden_dim: 128
+    time_embed_dim: 64
+    num_layers: 4
+    dropout: 0.1
+
+  # 출력 설정
+  output:
+    pred_steps: 50
+    coordinate_dim: 2
+    num_samples: 20
+
+# 데이터 설정
+data:
+  data_dir: "data/processed"
+  batch_size: 32
+  num_workers: 4
+
+  # 전체 데이터 사용
+  use_sampling: false
+  sample_ratio: 1.0
+
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+
+  # 증강 활성화
+  augmentation:
+    enabled: true
+    rotation: true
+    flip: true
+
+# 학습 설정
+training:
+  optimizer: "adamw"
+  learning_rate: 1e-4     # 안정적인 학습률
+  weight_decay: 1e-4
+
+  scheduler: "cosine"
+  warmup_epochs: 10
+  min_lr: 1e-6
+
+  num_epochs: 200         # 충분한 학습
+  max_grad_norm: 1.0
+
+  early_stopping:
+    patience: 20
+    min_delta: 0.0005
+
+  loss:
+    type: "mse"
+    weight_position: 1.0
+    weight_velocity: 0.5
+
+  use_amp: true
+  gradient_checkpointing: false
+
+# 평가 설정
+evaluation:
+  metrics:
+    - "ade"
+    - "fde"
+    - "nll"
+    - "collision_rate"
+
+  num_samples: 20
+  sampling_method: "ddim"
+  eval_every: 2
+
+# 로깅 및 저장
+logging:
+  log_dir: "runs/diffusion_full"
+  save_dir: "checkpoints/diffusion_full"
+  save_every: 5
+
+  tensorboard: true
+  log_images: true
+  log_every: 50
+
+  use_wandb: false
+
+# 디바이스 설정
+device:
+  use_cuda: true
+  device_id: 0
+
+# 전체 학습 모드
+fast_mode:
+  enabled: false
+  reduce_val_frequency: false
+  skip_test: false
+  cache_data: true
+
+seed: 42
+deterministic: false
+
