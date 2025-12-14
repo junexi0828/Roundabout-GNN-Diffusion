@@ -633,13 +633,39 @@ class HybridGNNMID(nn.Module):
                     all_embeddings, dim=0, keepdim=True
                 )  # [1, hidden_dim]
             elif graph_data is not None:
-                # 일반 GAT 사용
+                # 일반 GAT 사용 (ModuleList인 경우)
+                # HeteroGAT인 경우는 hetero_data가 필요하므로 여기서는 일반 GAT만 처리
                 x = graph_data.x
                 edge_index = graph_data.edge_index
 
-                for layer in self.gnn_encoder:
-                    x = layer(x, edge_index)
-                    x = F.relu(x)
+                # ModuleList인 경우 (일반 GAT)
+                if isinstance(self.gnn_encoder, nn.ModuleList):
+                    for layer in self.gnn_encoder:
+                        x = layer(x, edge_index)
+                        x = F.relu(x)
+                else:
+                    # HeteroGAT인 경우 - graph_data를 hetero_data로 변환
+                    # 단일 노드 타입으로 가정 (기본 타입 사용)
+                    if self.is_hetero and hasattr(self, 'gnn_encoder'):
+                        # 기본 노드 타입 사용 (첫 번째 노드 타입)
+                        default_node_type = self.gnn_encoder.node_types[0] if hasattr(self.gnn_encoder, 'node_types') else 'agent'
+                        
+                        # 일반 그래프를 이기종 그래프 형태로 변환
+                        x_dict = {default_node_type: x}
+                        # 기본 엣지 타입 생성
+                        if hasattr(self.gnn_encoder, 'edge_types') and self.gnn_encoder.edge_types:
+                            default_edge_type = self.gnn_encoder.edge_types[0]
+                            edge_index_dict = {default_edge_type: edge_index}
+                        else:
+                            edge_index_dict = {(default_node_type, 'spatial', default_node_type): edge_index}
+                        
+                        # HeteroGAT forward
+                        out_dict = self.gnn_encoder(x_dict, edge_index_dict)
+                        # 모든 노드 타입의 임베딩 결합
+                        x = torch.cat(list(out_dict.values()), dim=0) if out_dict else x
+                    else:
+                        # fallback: 입력 그대로 사용
+                        pass
 
                 # 그래프 레벨 특징 (평균 풀링)
                 graph_embedding = torch.mean(x, dim=0, keepdim=True)  # [1, hidden_dim]
