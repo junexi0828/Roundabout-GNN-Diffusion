@@ -17,6 +17,16 @@ def download_sdd_in_colab(output_dir: Path):
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # 이미 데이터가 있는지 확인
+    annotation_files = list(output_dir.glob("**/annotations.txt"))
+    if annotation_files:
+        print("=" * 80)
+        print("✓ SDD 데이터 이미 존재")
+        print("=" * 80)
+        print(f"  어노테이션 파일: {len(annotation_files)}개")
+        print(f"  위치: {output_dir}")
+        return True
+
     print("=" * 80)
     print("🚀 SDD Death Circle 데이터 다운로드 (Colab)")
     print("=" * 80)
@@ -130,6 +140,19 @@ def preprocess_in_colab(sdd_dir: Path, output_dir: Path):
     """
     Colab에서 SDD 데이터 전처리
     """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # 이미 전처리된 데이터가 있는지 확인
+    csv_files = list(output_dir.glob("*.csv"))
+    if csv_files:
+        print("\n" + "=" * 80)
+        print("✓ 전처리된 데이터 이미 존재")
+        print("=" * 80)
+        print(f"  CSV 파일: {len(csv_files)}개")
+        print(f"  위치: {output_dir}")
+        return True
+
     print("\n" + "=" * 80)
     print("🔄 SDD 데이터 전처리 (Colab)")
     print("=" * 80)
