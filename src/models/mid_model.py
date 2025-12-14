@@ -566,7 +566,7 @@ class HybridGNNMID(nn.Module):
 
                 self.gnn_encoder = nn.ModuleList(
                     [
-                        GATConv(node_features, hidden_dim, heads=4, concat=False),
+                    GATConv(node_features, hidden_dim, heads=4, concat=False),
                         GATConv(hidden_dim, hidden_dim, heads=4, concat=False),
                     ]
                 )
