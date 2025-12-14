@@ -240,47 +240,44 @@ class LocalAutoPipeline:
             print("❌ 윈도우 생성 실패")
             return None
 
-    # ========================================================================
-    # 베이스라인 학습 메서드 (주석 처리 - 나중에 비교 실험 시 사용)
-    # ========================================================================
-    # def train_baseline(self, data_dir: str, baseline_name: str = "a3tgcn"):
-    #     """GNN 기반 베이스라인 모델 학습"""
-    #     print(f"\n[GNN 모델 학습: {baseline_name.upper()}]")
-    #
-    #     if baseline_name == "a3tgcn":
-    #         train_script = (
-    #             self.project_root / "scripts" / "training" / "train_a3tgcn.py"
-    #         )
-    #         config_file = self.project_root / "configs" / "a3tgcn_config.yaml"
-    #     else:
-    #         print(f"⚠️  알 수 없는 베이스라인: {baseline_name}")
-    #         return False
-    #
-    #     if not train_script.exists():
-    #         print(f"⚠️  학습 스크립트 없음: {train_script}")
-    #         return False
-    #
-    #     print(f"  설정 파일: {config_file}")
-    #     print(f"  학습 스크립트: {train_script}")
-    #
-    #     result = subprocess.run(
-    #         [
-    #             sys.executable,
-    #             str(train_script),
-    #             "--config",
-    #             str(config_file),
-    #             "--data_dir",
-    #             data_dir,
-    #         ],
-    #         cwd=self.project_root,
-    #     )
-    #
-    #     if result.returncode == 0:
-    #         print(f"\n✓ {baseline_name.upper()} 학습 완료")
-    #         return True
-    #     else:
-    #         print(f"\n⚠️  {baseline_name.upper()} 학습 중 오류 발생")
-    #         return False
+    def train_baseline(self, data_dir: str, baseline_name: str = "a3tgcn"):
+        """GNN 기반 베이스라인 모델 학습"""
+        print(f"\n[GNN 모델 학습: {baseline_name.upper()}]")
+
+        if baseline_name == "a3tgcn":
+            train_script = (
+                self.project_root / "scripts" / "training" / "train_a3tgcn.py"
+            )
+            config_file = self.project_root / "configs" / "a3tgcn_config.yaml"
+        else:
+            print(f"⚠️  알 수 없는 베이스라인: {baseline_name}")
+            return False
+
+        if not train_script.exists():
+            print(f"⚠️  학습 스크립트 없음: {train_script}")
+            return False
+
+        print(f"  설정 파일: {config_file}")
+        print(f"  학습 스크립트: {train_script}")
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(train_script),
+                "--config",
+                str(config_file),
+                "--data_dir",
+                data_dir,
+            ],
+            cwd=self.project_root,
+        )
+
+        if result.returncode == 0:
+            print(f"\n✓ {baseline_name.upper()} 학습 완료")
+            return True
+        else:
+            print(f"\n⚠️  {baseline_name.upper()} 학습 중 오류 발생")
+            return False
 
     def train_model(self, data_dir: str):
         """MID 모델 학습 (GNN 다음 단계)"""
@@ -398,11 +395,26 @@ class LocalAutoPipeline:
             print(f"데이터 전처리 실패: {e}")
             return False
 
-        # 4. MID 모델 학습 (HSG-Diffusion 핵심)
+        # 4. GNN 모델 학습 (선택적 - ultra_fast 모드에서는 스킵)
+        if self.mode != "ultra_fast":
+            try:
+                # A3TGCN 학습 (GNN 기반)
+                a3tgcn_success = self.step(
+                    4,
+                    6,
+                    "GNN 모델 학습 (A3TGCN)",
+                    lambda: self.train_baseline(processed_dir, "a3tgcn"),
+                )
+                if not a3tgcn_success:
+                    print("⚠️  A3TGCN 학습 실패했지만 계속 진행합니다...")
+            except Exception as e:
+                print(f"⚠️  A3TGCN 학습 실패: {e}")
+
+        # 5. MID 모델 학습 (GNN 다음 단계)
         try:
             success = self.step(
-                4,
-                5,
+                5 if self.mode != "ultra_fast" else 4,
+                6 if self.mode != "ultra_fast" else 5,
                 "MID 모델 학습",
                 lambda: self.train_model(processed_dir),
             )
@@ -413,9 +425,10 @@ class LocalAutoPipeline:
             print(f"MID 모델 학습 실패: {e}")
             return False
 
-        # 5. 결과 시각화
+        # 6. 결과 시각화
+        step_num = 6 if self.mode != "ultra_fast" else 5
         try:
-            self.step(5, 5, "결과 시각화", self.visualize_results)
+            self.step(step_num, step_num, "결과 시각화", self.visualize_results)
         except Exception as e:
             print(f"시각화 실패: {e}")
 

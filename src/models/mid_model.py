@@ -235,6 +235,9 @@ class MIDModel(nn.Module):
         beta_start: float = 0.0001,
         beta_end: float = 0.02,
         use_transformer_encoder: bool = False,
+        denoiser_num_layers: int = 4,  # 설정 파일에서 받음
+        denoiser_num_heads: int = 8,  # 설정 파일에서 받음
+        denoiser_dropout: float = 0.1,  # 설정 파일에서 받음
     ):
         super(MIDModel, self).__init__()
 
@@ -251,13 +254,13 @@ class MIDModel(nn.Module):
             use_transformer=use_transformer_encoder,
         )
 
-        # Denoiser
+        # Denoiser (설정 파일 값 사용)
         self.denoiser = TransformerDenoiser(
             input_dim=2,
             hidden_dim=hidden_dim,
-            num_layers=4,
-            num_heads=8,
-            dropout=0.1,
+            num_layers=denoiser_num_layers,
+            num_heads=denoiser_num_heads,
+            dropout=denoiser_dropout,
             pred_steps=pred_steps,
         )
 
@@ -752,6 +755,9 @@ def create_mid_model(
     use_hetero_gnn: bool = True,
     node_types: Optional[List[str]] = None,
     edge_types: Optional[List[Tuple[str, str, str]]] = None,
+    denoiser_num_layers: int = 4,
+    denoiser_num_heads: int = 8,
+    denoiser_dropout: float = 0.1,
 ) -> nn.Module:
     """
     MID 모델 생성 헬퍼 함수
@@ -796,6 +802,9 @@ def create_mid_model(
             pred_steps=pred_steps,
             hidden_dim=hidden_dim,
             num_diffusion_steps=num_diffusion_steps,
+            denoiser_num_layers=denoiser_num_layers,
+            denoiser_num_heads=denoiser_num_heads,
+            denoiser_dropout=denoiser_dropout,
         )
 
 

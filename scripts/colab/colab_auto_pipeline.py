@@ -175,10 +175,58 @@ class ColabAutoPipeline:
             check=True,
         )
 
-        print("  ✓ torch-geometric 설치 완료")
-        print("  ℹ️  torch-geometric-temporal 제거됨 (커스텀 ST Encoder 사용)")
-
-        print("✓ 라이브러리 설치 완료")
+        # torch-geometric-temporal (A3TGCN용)
+        if self.mode == "ultra_fast":
+            # ultra_fast 모드에서는 스킵 (빌드 시간 절약)
+            print("  ⚠️  torch-geometric-temporal 스킵 (ultra_fast 모드)")
+        else:
+            # fast/full 모드에서는 설치 (A3TGCN 학습 필요)
+            print("  설치 중: torch-geometric-temporal...")
+            # 버전 호환성 문제 해결: 최신 버전 시도, 실패 시 특정 버전
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "install",
+                    "-q",
+                    "torch-geometric-temporal",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                print("  ⚠️  최신 버전 설치 실패, 호환 버전 시도 중...")
+                print(
+                    f"  오류: {result.stderr[:200] if result.stderr else '알 수 없는 오류'}"
+                )
+                # 호환 가능한 버전 시도 (0.54.0은 대부분의 torch-geometric과 호환)
+                result2 = subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "pip",
+                        "install",
+                        "-q",
+                        "torch-geometric-temporal==0.54.0",
+                    ],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                if result2.returncode != 0:
+                    print("  ⚠️  호환 버전(0.54.0) 설치도 실패")
+                    print(
+                        f"  오류: {result2.stderr[:200] if result2.stderr else '알 수 없는 오류'}"
+                    )
+                    print(
+                        "  ⚠️  torch-geometric-temporal 설치 실패, A3TGCN 학습은 건너뜁니다"
+                    )
+                else:
+                    print("  ✓ torch-geometric-temporal (0.54.0) 설치 완료")
+            else:
+                print("  ✓ torch-geometric-temporal 설치 완료")
 
         print("✓ 라이브러리 설치 완료")
 
@@ -833,69 +881,80 @@ class ColabAutoPipeline:
         # 1단계: GNN 기반 모델 학습 (A3TGCN, Trajectron++)
         # ultra_fast 모드에서는 스킵 (torch-geometric-temporal 미설치)
         # ========================================================================
-        # ========================================================================
-        # 베이스라인 학습 (주석 처리 - HSG-Diffusion 결과물 우선)
-        # ========================================================================
-        # 나중에 비교 실험이 필요하면 주석 해제하세요
 
-        # # 6. A3TGCN 학습 (선택적)
-        # if self.mode != "ultra_fast":
-        #     try:
-        #         a3tgcn_success = self.step(
-        #             6,
-        #             10,
-        #             "GNN 모델 학습 (A3TGCN)",
-        #             lambda: self.train_baseline(processed_dir, "a3tgcn"),
-        #         )
-        #         if not a3tgcn_success:
-        #             print("⚠️  A3TGCN 학습 실패했지만 계속 진행합니다...")
-        #     except Exception as e:
-        #         print(f"⚠️  A3TGCN 학습 실패: {e}")
+        if self.mode != "ultra_fast":
+            # 베이스라인 학습 (A3TGCN) - GNN 기반
+            try:
+                a3tgcn_success = self.step(
+                    6,
+                    10,
+                    "GNN 모델 학습 (A3TGCN)",
+                    lambda: self.train_baseline(processed_dir, "a3tgcn"),
+                )
+                if not a3tgcn_success:
+                    print("⚠️  A3TGCN 학습 실패했지만 계속 진행합니다...")
+            except Exception as e:
+                print(f"⚠️  A3TGCN 학습 실패: {e}")
 
-        # # 7. Trajectron++ 학습 (full 모드만)
-        # if self.mode == "full":
-        #     try:
-        #         traj_success = self.step(
-        #             7,
-        #             10,
-        #             "Trajectron++ 학습",
-        #             lambda: self.train_baseline(processed_dir, "trajectron"),
-        #         )
-        #         if not traj_success:
-        #             print("⚠️  Trajectron++ 학습 실패했지만 계속 진행합니다...")
-        #     except Exception as e:
-        #         print(f"⚠️  Trajectron++ 학습 실패: {e}")
-
-        # ========================================================================
-        # HSG-Diffusion 학습 (핵심 모델)
+            # 베이스라인 학습 (Trajectron++) - GNN 기반
+            try:
+                trajectron_success = self.step(
+                    7,
+                    10,
+                    "GNN 모델 학습 (Trajectron++)",
+                    lambda: self.train_baseline(processed_dir, "trajectron"),
+                )
+                if not trajectron_success:
+                    print("⚠️  Trajectron++ 학습 실패했지만 계속 진행합니다...")
+            except Exception as e:
+                print(f"⚠️  Trajectron++ 학습 실패: {e}")
+        else:
+            print(
+                "\n⚠️  ultra_fast 모드: GNN 모델 학습 스킵 (torch-geometric-temporal 미설치)"
+            )
+            print("  A3TGCN과 Trajectron++ 학습을 건너뜁니다.")
         # ========================================================================
 
-        # 6. MID 모델 학습
+        # ========================================================================
+        # 2단계: MID 모델 학습 (GNN 다음 단계)
+        # ========================================================================
         try:
             success = self.step(
-                6,
-                8,
-                "MID 모델 학습 (HSG-Diffusion)",
+                8 if self.mode != "ultra_fast" else 6,
+                10,
+                "MID 모델 학습",
                 lambda: self.train_model(processed_dir),
             )
             if not success:
-                print("⚠️  MID 학습 실패")
-                return False
+                print("⚠️  MID 학습 실패했지만 계속 진행합니다...")
         except Exception as e:
-            print(f"MID 모델 학습 실패: {e}")
+            print(f"❌ MID 모델 학습 실패: {e}")
             return False
+        # ========================================================================
 
-        # 7. 결과 시각화
-        try:
-            self.step(7, 8, "결과 시각화", self.visualize_results)
-        except Exception as e:
-            print(f"시각화 실패: {e}")
+        # ========================================================================
+        # 3단계: 베이스라인 비교 평가
+        # ========================================================================
+        if self.mode != "ultra_fast":
+            try:
+                self.step(9, 10, "베이스라인 비교 평가", self.compare_baselines)
+            except Exception as e:
+                print(f"⚠️  비교 평가 실패: {e}")
+        # ========================================================================
 
-        # 8. 결과 저장
+        # 시각화
+        step_num = 10 if self.mode != "ultra_fast" else 7
         try:
-            self.step(8, 8, "결과 저장 (Drive)", self.save_results)
+            self.step(step_num, step_num, "결과 시각화", self.visualize_results)
         except Exception as e:
-            print(f"결과 저장 실패: {e}")
+            print(f"⚠️  시각화 실패: {e}")
+
+        # 결과 저장
+        step_num += 1
+        try:
+            self.step(step_num, step_num, "결과 저장", self.save_results)
+        except Exception as e:
+            print(f"⚠️  결과 저장 실패: {e}")
 
         print("\n" + "=" * 80)
         print("✓ 전체 파이프라인 완료!")
