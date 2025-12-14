@@ -55,7 +55,7 @@ class TransformerDenoiser(nn.Module):
         num_layers: int = 4,
         num_heads: int = 8,
         dropout: float = 0.1,
-        pred_steps: int = 50
+        pred_steps: int = 50,
     ):
         super(TransformerDenoiser, self).__init__()
 
@@ -70,7 +70,7 @@ class TransformerDenoiser(nn.Module):
         self.time_mlp = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim)
+            nn.Linear(hidden_dim, hidden_dim),
         )
 
         # 조건 임베딩 (관측 정보)
@@ -82,12 +82,9 @@ class TransformerDenoiser(nn.Module):
             nhead=num_heads,
             dim_feedforward=hidden_dim * 4,
             dropout=dropout,
-            batch_first=True
+            batch_first=True,
         )
-        self.transformer = nn.TransformerEncoder(
-            encoder_layer,
-            num_layers=num_layers
-        )
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
         # 출력 레이어
         self.output_mlp = nn.Sequential(
@@ -96,14 +93,11 @@ class TransformerDenoiser(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(hidden_dim * 2, hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, input_dim)  # (x, y)
+            nn.Linear(hidden_dim, input_dim),  # (x, y)
         )
 
     def forward(
-        self,
-        x_t: torch.Tensor,
-        t: torch.Tensor,
-        condition: torch.Tensor
+        self, x_t: torch.Tensor, t: torch.Tensor, condition: torch.Tensor
     ) -> torch.Tensor:
         """
         Denoiser forward pass
@@ -124,11 +118,15 @@ class TransformerDenoiser(nn.Module):
         # 타임스텝 임베딩
         t_emb = self.time_embedding(t)  # [batch, hidden_dim]
         t_emb = self.time_mlp(t_emb)  # [batch, hidden_dim]
-        t_emb = t_emb.unsqueeze(1).expand(-1, self.pred_steps, -1)  # [batch, pred_steps, hidden_dim]
+        t_emb = t_emb.unsqueeze(1).expand(
+            -1, self.pred_steps, -1
+        )  # [batch, pred_steps, hidden_dim]
 
         # 조건 임베딩
         cond_emb = self.condition_proj(condition)  # [batch, hidden_dim]
-        cond_emb = cond_emb.unsqueeze(1).expand(-1, self.pred_steps, -1)  # [batch, pred_steps, hidden_dim]
+        cond_emb = cond_emb.unsqueeze(1).expand(
+            -1, self.pred_steps, -1
+        )  # [batch, pred_steps, hidden_dim]
 
         # 결합
         x_emb = x_emb + t_emb + cond_emb  # [batch, pred_steps, hidden_dim]
@@ -153,7 +151,7 @@ class ObservationEncoder(nn.Module):
         input_dim: int = 2,  # (x, y)
         hidden_dim: int = 128,
         num_layers: int = 2,
-        use_transformer: bool = False
+        use_transformer: bool = False,
     ):
         super(ObservationEncoder, self).__init__()
 
@@ -166,7 +164,7 @@ class ObservationEncoder(nn.Module):
                 d_model=hidden_dim,
                 nhead=8,
                 dim_feedforward=hidden_dim * 4,
-                batch_first=True
+                batch_first=True,
             )
             self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
             self.input_proj = nn.Linear(input_dim, hidden_dim)
@@ -177,7 +175,7 @@ class ObservationEncoder(nn.Module):
                 hidden_dim,
                 num_layers=num_layers,
                 batch_first=True,
-                bidirectional=True
+                bidirectional=True,
             )
             # 양방향 LSTM이므로 hidden_dim * 2
             self.hidden_dim = hidden_dim * 2
@@ -208,7 +206,9 @@ class ObservationEncoder(nn.Module):
             h_n = h_n.view(self.encoder.num_layers, 2, encoded.size(0), -1)
             h_forward = h_n[-1, 0]  # [batch, hidden_dim]
             h_backward = h_n[-1, 1]  # [batch, hidden_dim]
-            encoded = torch.cat([h_forward, h_backward], dim=1)  # [batch, hidden_dim * 2]
+            encoded = torch.cat(
+                [h_forward, h_backward], dim=1
+            )  # [batch, hidden_dim * 2]
 
         # 출력 프로젝션
         output = self.output_proj(encoded)  # [batch, hidden_dim]
@@ -234,7 +234,7 @@ class MIDModel(nn.Module):
         num_diffusion_steps: int = 100,
         beta_start: float = 0.0001,
         beta_end: float = 0.02,
-        use_transformer_encoder: bool = False
+        use_transformer_encoder: bool = False,
     ):
         super(MIDModel, self).__init__()
 
@@ -248,7 +248,7 @@ class MIDModel(nn.Module):
             input_dim=2,  # (x, y)
             hidden_dim=hidden_dim,
             num_layers=2,
-            use_transformer=use_transformer_encoder
+            use_transformer=use_transformer_encoder,
         )
 
         # Denoiser
@@ -258,7 +258,7 @@ class MIDModel(nn.Module):
             num_layers=4,
             num_heads=8,
             dropout=0.1,
-            pred_steps=pred_steps
+            pred_steps=pred_steps,
         )
 
         # Beta 스케줄 (선형)
@@ -268,22 +268,28 @@ class MIDModel(nn.Module):
         alphas_cumprod_prev = F.pad(alphas_cumprod[:-1], (1, 0), value=1.0)
 
         # 등록 (버퍼로 저장)
-        self.register_buffer('betas', betas)
-        self.register_buffer('alphas', alphas)
-        self.register_buffer('alphas_cumprod', alphas_cumprod)
-        self.register_buffer('alphas_cumprod_prev', alphas_cumprod_prev)
+        self.register_buffer("betas", betas)
+        self.register_buffer("alphas", alphas)
+        self.register_buffer("alphas_cumprod", alphas_cumprod)
+        self.register_buffer("alphas_cumprod_prev", alphas_cumprod_prev)
 
         # DDIM용
-        self.register_buffer('sqrt_alphas_cumprod', torch.sqrt(alphas_cumprod))
-        self.register_buffer('sqrt_one_minus_alphas_cumprod', torch.sqrt(1.0 - alphas_cumprod))
-        self.register_buffer('sqrt_recip_alphas_cumprod', torch.sqrt(1.0 / alphas_cumprod))
-        self.register_buffer('sqrt_recipm1_alphas_cumprod', torch.sqrt(1.0 / alphas_cumprod - 1))
+        self.register_buffer("sqrt_alphas_cumprod", torch.sqrt(alphas_cumprod))
+        self.register_buffer(
+            "sqrt_one_minus_alphas_cumprod", torch.sqrt(1.0 - alphas_cumprod)
+        )
+        self.register_buffer(
+            "sqrt_recip_alphas_cumprod", torch.sqrt(1.0 / alphas_cumprod)
+        )
+        self.register_buffer(
+            "sqrt_recipm1_alphas_cumprod", torch.sqrt(1.0 / alphas_cumprod - 1)
+        )
 
     def q_sample(
         self,
         x_start: torch.Tensor,
         t: torch.Tensor,
-        noise: Optional[torch.Tensor] = None
+        noise: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
         Forward Diffusion Process (노이즈 추가)
@@ -300,7 +306,9 @@ class MIDModel(nn.Module):
             noise = torch.randn_like(x_start)
 
         sqrt_alphas_cumprod_t = self.sqrt_alphas_cumprod[t].view(-1, 1, 1)
-        sqrt_one_minus_alphas_cumprod_t = self.sqrt_one_minus_alphas_cumprod[t].view(-1, 1, 1)
+        sqrt_one_minus_alphas_cumprod_t = self.sqrt_one_minus_alphas_cumprod[t].view(
+            -1, 1, 1
+        )
 
         return sqrt_alphas_cumprod_t * x_start + sqrt_one_minus_alphas_cumprod_t * noise
 
@@ -309,7 +317,7 @@ class MIDModel(nn.Module):
         x_t: torch.Tensor,
         t: torch.Tensor,
         condition: torch.Tensor,
-        return_pred_xstart: bool = False
+        return_pred_xstart: bool = False,
     ) -> torch.Tensor:
         """
         Reverse Diffusion Process (노이즈 제거)
@@ -328,8 +336,8 @@ class MIDModel(nn.Module):
 
         # 예측된 시작점 계산
         pred_xstart = (
-            self.sqrt_recip_alphas_cumprod[t].view(-1, 1, 1) * x_t -
-            self.sqrt_recipm1_alphas_cumprod[t].view(-1, 1, 1) * pred_noise
+            self.sqrt_recip_alphas_cumprod[t].view(-1, 1, 1) * x_t
+            - self.sqrt_recipm1_alphas_cumprod[t].view(-1, 1, 1) * pred_noise
         )
 
         if return_pred_xstart:
@@ -343,8 +351,8 @@ class MIDModel(nn.Module):
         # 노이즈 샘플링
         noise = torch.randn_like(x_t)
         pred_xprev = (
-            torch.sqrt(alpha_cumprod_t_prev) * pred_xstart +
-            torch.sqrt(1.0 - alpha_cumprod_t_prev) * noise
+            torch.sqrt(alpha_cumprod_t_prev) * pred_xstart
+            + torch.sqrt(1.0 - alpha_cumprod_t_prev) * noise
         )
 
         return pred_xprev
@@ -355,7 +363,7 @@ class MIDModel(nn.Module):
         t: torch.Tensor,
         t_prev: torch.Tensor,
         condition: torch.Tensor,
-        eta: float = 0.0
+        eta: float = 0.0,
     ) -> torch.Tensor:
         """
         DDIM 샘플링 (빠른 샘플링)
@@ -375,8 +383,8 @@ class MIDModel(nn.Module):
 
         # 예측된 시작점
         pred_xstart = (
-            self.sqrt_recip_alphas_cumprod[t].view(-1, 1, 1) * x_t -
-            self.sqrt_recipm1_alphas_cumprod[t].view(-1, 1, 1) * pred_noise
+            self.sqrt_recip_alphas_cumprod[t].view(-1, 1, 1) * x_t
+            - self.sqrt_recipm1_alphas_cumprod[t].view(-1, 1, 1) * pred_noise
         )
 
         # DDIM 샘플링
@@ -402,7 +410,7 @@ class MIDModel(nn.Module):
         x_t: Optional[torch.Tensor] = None,
         graph_data: Optional[Data] = None,  # GNN 미사용 시 무시
         hetero_data: Optional[HeteroData] = None,  # GNN 미사용 시 무시
-        **kwargs  # 추가 인수 무시
+        **kwargs,  # 추가 인수 무시
     ) -> torch.Tensor:
         """
         Forward pass (학습용)
@@ -447,7 +455,7 @@ class MIDModel(nn.Module):
         obs_trajectory: torch.Tensor,
         num_samples: int = 20,
         ddim_steps: Optional[int] = None,
-        ddim_eta: float = 0.0
+        ddim_eta: float = 0.0,
     ) -> torch.Tensor:
         """
         샘플링 (추론용)
@@ -482,17 +490,23 @@ class MIDModel(nn.Module):
                     timesteps.append(self.num_diffusion_steps - 1)
 
                 for i in range(len(timesteps) - 1):
-                    t_val = timesteps[-(i+1)]
-                    t_prev_val = timesteps[-(i+2)] if i+2 < len(timesteps) else 0
+                    t_val = timesteps[-(i + 1)]
+                    t_prev_val = timesteps[-(i + 2)] if i + 2 < len(timesteps) else 0
 
-                    t = torch.full((batch_size,), t_val, device=device, dtype=torch.long)
-                    t_prev = torch.full((batch_size,), t_prev_val, device=device, dtype=torch.long)
+                    t = torch.full(
+                        (batch_size,), t_val, device=device, dtype=torch.long
+                    )
+                    t_prev = torch.full(
+                        (batch_size,), t_prev_val, device=device, dtype=torch.long
+                    )
 
                     x_t = self.p_sample_ddim(x_t, t, t_prev, condition, ddim_eta)
             else:
                 # 전체 스텝 샘플링
                 for t_val in range(self.num_diffusion_steps - 1, -1, -1):
-                    t = torch.full((batch_size,), t_val, device=device, dtype=torch.long)
+                    t = torch.full(
+                        (batch_size,), t_val, device=device, dtype=torch.long
+                    )
                     x_t = self.p_sample(x_t, t, condition)
 
             samples.append(x_t)
@@ -521,7 +535,7 @@ class HybridGNNMID(nn.Module):
         use_gnn: bool = True,
         use_hetero_gnn: bool = True,
         node_types: Optional[List[str]] = None,
-        edge_types: Optional[List[Tuple[str, str, str]]] = None
+        edge_types: Optional[List[Tuple[str, str, str]]] = None,
     ):
         super(HybridGNNMID, self).__init__()
 
@@ -540,17 +554,19 @@ class HybridGNNMID(nn.Module):
                     hidden_channels=hidden_dim,
                     out_channels=hidden_dim,
                     num_heads=4,
-                    num_layers=2
+                    num_layers=2,
                 )
                 self.is_hetero = True
             else:
                 # 기본 GAT 사용
                 from torch_geometric.nn import GATConv
 
-                self.gnn_encoder = nn.ModuleList([
-                    GATConv(node_features, hidden_dim, heads=4, concat=False),
-                    GATConv(hidden_dim, hidden_dim, heads=4, concat=False)
-                ])
+                self.gnn_encoder = nn.ModuleList(
+                    [
+                        GATConv(node_features, hidden_dim, heads=4, concat=False),
+                        GATConv(hidden_dim, hidden_dim, heads=4, concat=False),
+                    ]
+                )
                 self.is_hetero = False
         else:
             # 기본 인코더 (노드 특징만 사용)
@@ -562,14 +578,14 @@ class HybridGNNMID(nn.Module):
             obs_steps=obs_steps,
             pred_steps=pred_steps,
             hidden_dim=hidden_dim,
-            num_diffusion_steps=num_diffusion_steps
+            num_diffusion_steps=num_diffusion_steps,
         )
 
         # GNN 특징을 관측 궤적 형태로 변환 (MID 입력용)
         self.gnn_to_obs = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim * 2),
             nn.ReLU(),
-            nn.Linear(hidden_dim * 2, obs_steps * 2)  # (x, y) * obs_steps
+            nn.Linear(hidden_dim * 2, obs_steps * 2),  # (x, y) * obs_steps
         )
 
     def forward(
@@ -579,7 +595,7 @@ class HybridGNNMID(nn.Module):
         obs_trajectory: Optional[torch.Tensor] = None,
         future_trajectory: Optional[torch.Tensor] = None,
         t: Optional[torch.Tensor] = None,
-        x_t: Optional[torch.Tensor] = None
+        x_t: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
         Forward pass
@@ -599,8 +615,10 @@ class HybridGNNMID(nn.Module):
             # GNN 인코딩
             if self.is_hetero and hetero_data is not None:
                 # HeteroGAT 사용
-                x_dict = {node_type: hetero_data[node_type].x
-                         for node_type in hetero_data.node_types}
+                x_dict = {
+                    node_type: hetero_data[node_type].x
+                    for node_type in hetero_data.node_types
+                }
                 edge_index_dict = {
                     edge_type: hetero_data[edge_type].edge_index
                     for edge_type in hetero_data.edge_types
@@ -611,7 +629,9 @@ class HybridGNNMID(nn.Module):
 
                 # 모든 노드 타입의 임베딩 결합
                 all_embeddings = torch.cat(list(out_dict.values()), dim=0)
-                graph_embedding = torch.mean(all_embeddings, dim=0, keepdim=True)  # [1, hidden_dim]
+                graph_embedding = torch.mean(
+                    all_embeddings, dim=0, keepdim=True
+                )  # [1, hidden_dim]
             elif graph_data is not None:
                 # 일반 GAT 사용
                 x = graph_data.x
@@ -632,10 +652,12 @@ class HybridGNNMID(nn.Module):
 
             # 배치 차원 확장
             if self.is_hetero and hetero_data is not None:
-                batch_size = sum(hetero_data[node_type].x.size(0)
-                               for node_type in hetero_data.node_types)
+                batch_size = sum(
+                    hetero_data[node_type].x.size(0)
+                    for node_type in hetero_data.node_types
+                )
             elif graph_data is not None:
-                batch_size = graph_data.x.size(0) if hasattr(graph_data, 'batch') else 1
+                batch_size = graph_data.x.size(0) if hasattr(graph_data, "batch") else 1
             else:
                 batch_size = 1
 
@@ -655,7 +677,7 @@ class HybridGNNMID(nn.Module):
         hetero_data: Optional[HeteroData] = None,
         obs_trajectory: Optional[torch.Tensor] = None,
         num_samples: int = 20,
-        ddim_steps: int = 2
+        ddim_steps: int = 2,
     ) -> torch.Tensor:
         """
         다중 궤적 샘플링
@@ -674,8 +696,10 @@ class HybridGNNMID(nn.Module):
             # GNN 인코딩
             if self.is_hetero and hetero_data is not None:
                 # HeteroGAT 사용
-                x_dict = {node_type: hetero_data[node_type].x
-                         for node_type in hetero_data.node_types}
+                x_dict = {
+                    node_type: hetero_data[node_type].x
+                    for node_type in hetero_data.node_types
+                }
                 edge_index_dict = {
                     edge_type: hetero_data[edge_type].edge_index
                     for edge_type in hetero_data.edge_types
@@ -685,8 +709,10 @@ class HybridGNNMID(nn.Module):
                 all_embeddings = torch.cat(list(out_dict.values()), dim=0)
                 graph_embedding = torch.mean(all_embeddings, dim=0, keepdim=True)
 
-                batch_size = sum(hetero_data[node_type].x.size(0)
-                               for node_type in hetero_data.node_types)
+                batch_size = sum(
+                    hetero_data[node_type].x.size(0)
+                    for node_type in hetero_data.node_types
+                )
             elif graph_data is not None:
                 # 일반 GAT 사용
                 x = graph_data.x
@@ -697,7 +723,7 @@ class HybridGNNMID(nn.Module):
                     x = F.relu(x)
 
                 graph_embedding = torch.mean(x, dim=0, keepdim=True)
-                batch_size = graph_data.x.size(0) if hasattr(graph_data, 'batch') else 1
+                batch_size = graph_data.x.size(0) if hasattr(graph_data, "batch") else 1
             else:
                 raise ValueError("graph_data or hetero_data required when use_gnn=True")
 
@@ -705,11 +731,15 @@ class HybridGNNMID(nn.Module):
             obs_emb = obs_emb.view(1, -1, 2)
             obs_emb = obs_emb.expand(batch_size, -1, -1)
 
-            return self.mid.sample(obs_emb, num_samples=num_samples, ddim_steps=ddim_steps)
+            return self.mid.sample(
+                obs_emb, num_samples=num_samples, ddim_steps=ddim_steps
+            )
         else:
             if obs_trajectory is None:
                 raise ValueError("obs_trajectory required when use_gnn=False")
-            return self.mid.sample(obs_trajectory, num_samples=num_samples, ddim_steps=ddim_steps)
+            return self.mid.sample(
+                obs_trajectory, num_samples=num_samples, ddim_steps=ddim_steps
+            )
 
 
 def create_mid_model(
@@ -721,7 +751,7 @@ def create_mid_model(
     node_features: int = 9,
     use_hetero_gnn: bool = True,
     node_types: Optional[List[str]] = None,
-    edge_types: Optional[List[Tuple[str, str, str]]] = None
+    edge_types: Optional[List[Tuple[str, str, str]]] = None,
 ) -> nn.Module:
     """
     MID 모델 생성 헬퍼 함수
@@ -740,13 +770,13 @@ def create_mid_model(
     if use_gnn:
         # 기본 node_types와 edge_types 설정 (제공되지 않은 경우)
         if node_types is None:
-            node_types = ['car', 'pedestrian', 'biker', 'skater', 'cart', 'bus']
+            node_types = ["car", "pedestrian", "biker", "skater", "cart", "bus"]
         if edge_types is None:
             edge_types = [
-                ('car', 'spatial', 'car'),
-                ('car', 'spatial', 'pedestrian'),
-                ('pedestrian', 'spatial', 'biker'),
-                ('biker', 'spatial', 'car'),
+                ("car", "spatial", "car"),
+                ("car", "spatial", "pedestrian"),
+                ("pedestrian", "spatial", "biker"),
+                ("biker", "spatial", "car"),
             ]
 
         return HybridGNNMID(
@@ -758,14 +788,14 @@ def create_mid_model(
             use_gnn=True,
             use_hetero_gnn=use_hetero_gnn,
             node_types=node_types,
-            edge_types=edge_types
+            edge_types=edge_types,
         )
     else:
         return MIDModel(
             obs_steps=obs_steps,
             pred_steps=pred_steps,
             hidden_dim=hidden_dim,
-            num_diffusion_steps=num_diffusion_steps
+            num_diffusion_steps=num_diffusion_steps,
         )
 
 
@@ -782,7 +812,7 @@ def main():
         hidden_dim=128,
         num_diffusion_steps=100,
         use_gnn=True,
-        node_features=9
+        node_features=9,
     )
 
     print(f"\n모델 구조:")
@@ -794,9 +824,9 @@ def main():
 
     # 그래프 데이터
     from torch_geometric.data import Data
+
     graph_data = Data(
-        x=torch.randn(num_nodes, 9),
-        edge_index=torch.randint(0, num_nodes, (2, 20))
+        x=torch.randn(num_nodes, 9), edge_index=torch.randint(0, num_nodes, (2, 20))
     )
 
     # Forward pass
@@ -829,4 +859,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
