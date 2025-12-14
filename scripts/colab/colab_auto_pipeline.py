@@ -163,8 +163,7 @@ class ColabAutoPipeline:
         for pkg in basic_packages:
             print(f"  설치 중: {pkg.split()[0]}...")
             subprocess.run(
-                [sys.executable, "-m", "pip", "install", "-q"] + pkg.split(),
-                check=True
+                [sys.executable, "-m", "pip", "install", "-q"] + pkg.split(), check=True
             )
 
         # PyTorch Geometric (간소화된 설치)
@@ -172,16 +171,21 @@ class ColabAutoPipeline:
 
         # pip의 기본 해결 방식 사용 (가장 빠름)
         subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-q",
-             "torch-geometric"],
-            check=True
+            [sys.executable, "-m", "pip", "install", "-q", "torch-geometric"],
+            check=True,
         )
 
-        # torch-geometric-temporal (A3TGCN용)은 빌드 시간이 매우 오래 걸리므로 스킵
-        # HSG-Diffusion만 사용하면 이 패키지는 불필요함
-        # A3TGCN이 필요한 경우 수동 설치:
-        #   !pip install torch-geometric-temporal
-        print("  ⚠️  torch-geometric-temporal 스킵 (A3TGCN 비활성화)")
+        # torch-geometric-temporal (A3TGCN용)
+        if self.mode == "ultra_fast":
+            # ultra_fast 모드에서는 스킵 (빌드 시간 절약)
+            print("  ⚠️  torch-geometric-temporal 스킵 (ultra_fast 모드)")
+        else:
+            # fast/full 모드에서는 설치 (A3TGCN 학습 필요)
+            print("  설치 중: torch-geometric-temporal...")
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-q", "torch-geometric-temporal"],
+                check=True,
+            )
 
         print("✓ 라이브러리 설치 완료")
 
@@ -500,6 +504,7 @@ class ColabAutoPipeline:
             except Exception as e:
                 print(f"❌ 윈도우 생성 실패: {e}")
                 import traceback
+
                 traceback.print_exc()
                 return None
 
@@ -883,7 +888,9 @@ class ColabAutoPipeline:
             except Exception as e:
                 print(f"⚠️  비교 평가 실패: {e}")
         else:
-            print("\n⚠️  ultra_fast 모드: 베이스라인 학습 스킵 (torch-geometric-temporal 미설치)")
+            print(
+                "\n⚠️  ultra_fast 모드: 베이스라인 학습 스킵 (torch-geometric-temporal 미설치)"
+            )
             print("  A3TGCN과 Trajectron++ 학습을 건너뜁니다.")
         # ========================================================================
 
