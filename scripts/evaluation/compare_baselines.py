@@ -60,6 +60,16 @@ def load_model(
         model.eval()
         return model
 
+    elif model_name == "Trajectron++":
+        # Trajectron++ 모델 로드
+        from src.baselines.trajectron_integration import TrajectronIntegration
+
+        model_config = config.get("model", {}) if config else {}
+        trajectron = TrajectronIntegration(config=config)
+        trajectron.model = checkpoint.get("model")  # Trajectron++ 전체 모델 저장
+        trajectron.device = device
+        return trajectron
+
     else:
         raise ValueError(f"알 수 없는 모델: {model_name}")
 
@@ -186,6 +196,63 @@ def evaluate_a3tgcn_model(model, test_loader, device):
         return {}
 
 
+def evaluate_trajectron_model(model, test_loader, device, num_samples: int = 25):
+    """Trajectron++ 모델 평가 (다중 모달리티 CVAE)"""
+    all_samples = []
+    all_ground_truths = []
+
+    print("\n[Trajectron++ 평가]")
+    with torch.no_grad():
+        for batch_idx, batch in enumerate(test_loader):
+            if isinstance(batch, dict):
+                obs_data = batch.get("obs_data", batch.get("obs_trajectory"))
+                future_data = batch.get("future_data", batch.get("future_trajectory"))
+            else:
+                obs_data = batch[0]
+                future_data = batch[1] if len(batch) > 1 else None
+
+            if obs_data is not None:
+                obs_data = obs_data.to(device)
+            if future_data is not None:
+                future_data = future_data.to(device)
+
+            try:
+                # Trajectron++ 예측 (다중 샘플)
+                predictions = model.predict(
+                    obs_trajectory=obs_data[:, :, :2] if obs_data is not None else None,
+                    num_samples=num_samples,
+                )
+
+                if predictions is not None and future_data is not None:
+                    # predictions: [batch, num_samples, pred_steps, 2]
+                    # future_data: [batch, pred_steps, 2]
+                    # 형식 맞추기: [num_samples, batch, pred_steps, 2]
+                    predictions = predictions.permute(1, 0, 2, 3)
+                    all_samples.append(predictions.detach().cpu().numpy())
+                    all_ground_truths.append(future_data.detach().cpu().numpy())
+            except Exception as e:
+                print(f"  ⚠️  배치 {batch_idx} 예측 실패: {e}")
+                continue
+
+            if (batch_idx + 1) % 10 == 0:
+                print(f"  진행: {batch_idx + 1}/{len(test_loader)}")
+
+    if all_samples and all_ground_truths:
+        samples_np = np.concatenate(
+            all_samples, axis=1
+        )  # [num_samples, total_batch, pred_steps, 2]
+        ground_truths_np = np.concatenate(
+            all_ground_truths, axis=0
+        )  # [total_batch, pred_steps, 2]
+
+        # DiffusionEvaluator 사용 (다중 샘플 평가)
+        evaluator = DiffusionEvaluator(k=num_samples)
+        metrics = evaluator.evaluate(samples_np, ground_truths_np)
+        return metrics
+    else:
+        return {}
+
+
 def generate_latex_table(results: Dict[str, Dict], output_path: Path):
     """논문용 LaTeX 표 생성"""
     latex_lines = [
@@ -260,6 +327,12 @@ def main():
         help="A3TGCN 모델 체크포인트",
     )
     parser.add_argument(
+        "--trajectron_checkpoint",
+        type=str,
+        default="checkpoints/trajectron/best_model.pth",
+        help="Trajectron++ 모델 체크포인트",
+    )
+    parser.add_argument(
         "--data_dir",
         type=str,
         default="data/processed",
@@ -276,6 +349,12 @@ def main():
         type=str,
         default="configs/a3tgcn_config.yaml",
         help="A3TGCN 설정 파일",
+    )
+    parser.add_argument(
+        "--trajectron_config",
+        type=str,
+        default="configs/trajectron_config.yaml",
+        help="Trajectron++ 설정 파일",
     )
     parser.add_argument(
         "--output_dir",
@@ -310,6 +389,11 @@ def main():
     if Path(args.a3tgcn_config).exists():
         with open(args.a3tgcn_config, "r") as f:
             a3tgcn_config = yaml.safe_load(f)
+
+    trajectron_config = None
+    if Path(args.trajectron_config).exists():
+        with open(args.trajectron_config, "r") as f:
+            trajectron_config = yaml.safe_load(f)
 
     # 데이터 로드
     data_file = Path(args.data_dir) / "sdd_windows.pkl"
@@ -355,6 +439,22 @@ def main():
         results["A3TGCN"] = a3tgcn_metrics
     else:
         print(f"⚠️  A3TGCN 체크포인트 없음: {a3tgcn_checkpoint}")
+
+    # 3. Trajectron++ 평가
+    trajectron_checkpoint = Path(args.trajectron_checkpoint)
+    if trajectron_checkpoint.exists():
+        print(f"\n[Trajectron++ 모델 로드] {trajectron_checkpoint}")
+        trajectron_model = load_model(
+            "Trajectron++", trajectron_checkpoint, device, trajectron_config
+        )
+        print("✓ 모델 로드 완료")
+
+        trajectron_metrics = evaluate_trajectron_model(
+            trajectron_model, test_loader, device, num_samples=25
+        )
+        results["Trajectron++"] = trajectron_metrics
+    else:
+        print(f"⚠️  Trajectron++ 체크포인트 없음: {trajectron_checkpoint}")
 
     # 결과 출력
     print("\n" + "=" * 80)

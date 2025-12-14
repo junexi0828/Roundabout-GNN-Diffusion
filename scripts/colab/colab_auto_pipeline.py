@@ -249,11 +249,21 @@ class ColabAutoPipeline:
         try:
             # 프로젝트 루트 디렉토리가 이미 존재하면 삭제하지 않고 그 안에 클론
             if self.project_root.exists() and not (self.project_root / ".git").exists():
-                # 디렉토리가 비어있지 않으면 다른 이름으로 클론
+                # 디렉토리가 비어있지 않으면 /content에 직접 클론
                 if any(self.project_root.iterdir()):
                     clone_name = "Roundabout-GNN-Diffusion"
-                    clone_path = current_dir / clone_name
-                    print(f"  기존 디렉토리 사용 중, {clone_name}로 클론...")
+                    # 경로 중복 방지: 항상 /content에 클론
+                    clone_path = Path("/content") / clone_name
+
+                    # 이미 존재하면 스킵
+                    if clone_path.exists() and (clone_path / "src").exists():
+                        print(f"✓ 저장소가 이미 존재: {clone_path}")
+                        self.project_root = clone_path
+                        if str(self.project_root) not in sys.path:
+                            sys.path.insert(0, str(self.project_root))
+                        return
+
+                    print(f"  {clone_path}에 클론...")
                     subprocess.run(
                         ["git", "clone", self.github_repo, str(clone_path)],
                         check=True,
@@ -667,11 +677,16 @@ class ColabAutoPipeline:
         a3tgcn_checkpoint = (
             self.project_root / "checkpoints" / "a3tgcn" / "best_model.pth"
         )
+        trajectron_checkpoint = (
+            self.project_root / "checkpoints" / "trajectron" / "best_model.pth"
+        )
 
         if not mid_checkpoint.exists():
             print(f"⚠️  MID 체크포인트 없음: {mid_checkpoint}")
         if not a3tgcn_checkpoint.exists():
             print(f"⚠️  A3TGCN 체크포인트 없음: {a3tgcn_checkpoint}")
+        if not trajectron_checkpoint.exists():
+            print(f"⚠️  Trajectron++ 체크포인트 없음: {trajectron_checkpoint}")
 
         result = subprocess.run(
             [
@@ -681,6 +696,8 @@ class ColabAutoPipeline:
                 str(mid_checkpoint),
                 "--a3tgcn_checkpoint",
                 str(a3tgcn_checkpoint),
+                "--trajectron_checkpoint",
+                str(trajectron_checkpoint),
                 "--data_dir",
                 "data/processed",
                 "--output_dir",
@@ -829,74 +846,80 @@ class ColabAutoPipeline:
             return False
 
         # ========================================================================
-        # 베이스라인 비교 (추후 연구과제)
-        # ========================================================================
-        # A3TGCN, Trajectron++ 베이스라인 비교는 추후 연구로 남김
-        # 현재는 HSG-Diffusion 모델 검증에 집중
-        #
-        # 베이스라인 비교가 필요한 경우 아래 주석을 해제하여 사용하세요.
+        # 베이스라인 비교 (A3TGCN, Trajectron++)
         # ========================================================================
 
-        print("\n" + "=" * 80)
-        print("⏭️  [7/10] 베이스라인 학습 건너뜀 (추후 연구)")
-        print("=" * 80)
-        print("추후 연구 과제:")
-        print("  - A3TGCN 베이스라인 비교")
-        print("  - Trajectron++ 베이스라인 비교")
-        print("=" * 80)
+        # 베이스라인 학습 (A3TGCN)
+        try:
+            a3tgcn_success = self.step(
+                7,
+                10,
+                "베이스라인 학습 (A3TGCN)",
+                lambda: self.train_baseline(processed_dir, "a3tgcn"),
+            )
+            if not a3tgcn_success:
+                print("⚠️  A3TGCN 학습 실패했지만 계속 진행합니다...")
+        except Exception as e:
+            print(f"⚠️  A3TGCN 학습 실패: {e}")
 
-        # # 베이스라인 학습 (A3TGCN)
-        # try:
-        #     a3tgcn_success = self.step(
-        #         7,
-        #         10,
-        #         "베이스라인 학습 (A3TGCN)",
-        #         lambda: self.train_baseline(processed_dir, "a3tgcn"),
-        #     )
-        #     if not a3tgcn_success:
-        #         print("⚠️  A3TGCN 학습 실패했지만 계속 진행합니다...")
-        # except Exception as e:
-        #     print(f"⚠️  A3TGCN 학습 실패: {e}")
-        #
-        # # 베이스라인 학습 (Trajectron++)
-        # try:
-        #     trajectron_success = self.step(
-        #         7,
-        #         10,
-        #         "베이스라인 학습 (Trajectron++)",
-        #         lambda: self.train_baseline(processed_dir, "trajectron"),
-        #     )
-        #     if not trajectron_success:
-        #         print("⚠️  Trajectron++ 학습 실패했지만 계속 진행합니다...")
-        # except Exception as e:
-        #     print(f"⚠️  Trajectron++ 학습 실패: {e}")
+        # 베이스라인 학습 (Trajectron++)
+        try:
+            trajectron_success = self.step(
+                8,
+                10,
+                "베이스라인 학습 (Trajectron++)",
+                lambda: self.train_baseline(processed_dir, "trajectron"),
+            )
+            if not trajectron_success:
+                print("⚠️  Trajectron++ 학습 실패했지만 계속 진행합니다...")
+        except Exception as e:
+            print(f"⚠️  Trajectron++ 학습 실패: {e}")
 
-        print("\n" + "=" * 80)
-        print("⏭️  [8/10] 베이스라인 비교 평가 건너뜀 (추후 연구)")
-        print("=" * 80)
-
-        # # 비교 평가
-        # try:
-        #     self.step(8, 10, "베이스라인 비교 평가", self.compare_baselines)
-        # except Exception as e:
-        #     print(f"⚠️  비교 평가 실패: {e}")
+        # 비교 평가
+        try:
+            self.step(9, 10, "베이스라인 비교 평가", self.compare_baselines)
+        except Exception as e:
+            print(f"⚠️  비교 평가 실패: {e}")
         # ========================================================================
 
         # 시각화
         try:
-            self.step(7, 8, "결과 시각화", self.visualize_results)
+            self.step(10, 10, "결과 시각화", self.visualize_results)
         except Exception as e:
             print(f"⚠️  시각화 실패: {e}")
 
         # 결과 저장
         try:
-            self.step(8, 8, "결과 저장", self.save_results)
+            self.step(11, 11, "결과 저장", self.save_results)
         except Exception as e:
             print(f"⚠️  결과 저장 실패: {e}")
 
         print("\n" + "=" * 80)
         print("✓ 전체 파이프라인 완료!")
         print("=" * 80)
+
+        # 결과 위치 출력
+        print("\n📊 결과 위치:")
+        print(f"  체크포인트: checkpoints/mid/")
+        print(f"  시각화: results/visualizations/")
+        print(f"  평가 지표: results/metrics/evaluation_results.json")
+        print(f"  TensorBoard 로그: runs/mid/")
+
+        # TensorBoard 링크
+        print("\n📈 TensorBoard:")
+        print("  Colab에서 실행:")
+        print("    %load_ext tensorboard")
+        print("    %tensorboard --logdir runs/mid")
+        print("\n  또는 로컬에서:")
+        print("    tensorboard --logdir runs/mid")
+        print("    http://localhost:6006")
+
+        # Drive 저장 위치
+        if self.drive_mount:
+            print(f"\n💾 Google Drive 저장:")
+            print(f"  /content/drive/MyDrive/Roundabout_AI_Results/")
+
+        print("\n" + "=" * 80)
 
         return True
 

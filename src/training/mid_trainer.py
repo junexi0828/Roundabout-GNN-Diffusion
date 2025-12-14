@@ -150,18 +150,18 @@ class MIDTrainer:
 
             # Forward pass (Mixed Precision)
             if self.use_amp:
-                with torch.cuda.amp.autocast():
+                with torch.amp.autocast('cuda'):
                     if future_data is not None:
                         # 타임스텝 랜덤 샘플링
                         batch_size = future_data.size(0)
                         t = torch.randint(
-                            0, self.model.mid.num_diffusion_steps,
+                            0, self.model.num_diffusion_steps,
                             (batch_size,), device=self.device
                         )
 
                         # Forward diffusion (노이즈 추가)
                         noise = torch.randn_like(future_data)
-                        x_t = self.model.mid.q_sample(future_data, t, noise)
+                        x_t = self.model.q_sample(future_data, t, noise)
 
                         # 노이즈 예측
                         pred_noise = self.model(
@@ -190,13 +190,13 @@ class MIDTrainer:
                     # 타임스텝 랜덤 샘플링
                     batch_size = future_data.size(0)
                     t = torch.randint(
-                        0, self.model.mid.num_diffusion_steps,
+                        0, self.model.num_diffusion_steps,
                         (batch_size,), device=self.device
                     )
 
                     # Forward diffusion
                     noise = torch.randn_like(future_data)
-                    x_t = self.model.mid.q_sample(future_data, t, noise)
+                    x_t = self.model.q_sample(future_data, t, noise)
 
                     # 노이즈 예측
                     pred_noise = self.model(
@@ -277,13 +277,13 @@ class MIDTrainer:
                     # 타임스텝 랜덤 샘플링
                     batch_size = future_data.size(0)
                     t = torch.randint(
-                        0, self.model.mid.num_diffusion_steps,
+                        0, self.model.num_diffusion_steps,
                         (batch_size,), device=self.device
                     )
 
                     # Forward diffusion
                     noise = torch.randn_like(future_data)
-                    x_t = self.model.mid.q_sample(future_data, t, noise)
+                    x_t = self.model.q_sample(future_data, t, noise)
 
                     # 노이즈 예측
                     pred_noise = self.model(
