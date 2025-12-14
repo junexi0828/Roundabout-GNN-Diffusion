@@ -284,12 +284,22 @@ def collate_fn(batch: List[Dict]) -> Dict:
                 obs_data[["x", "y", "vx", "vy", "psi_rad"]].values, dtype=torch.float
             )
         else:
-            obs_tensor = torch.tensor(obs_data, dtype=torch.float)
+            # numpy array인 경우 - 처음 5개 특징만 사용 (x, y, vx, vy, psi_rad)
+            # 또는 x, y만 필요한 경우 :2 사용
+            obs_array = np.array(obs_data)
+            if obs_array.shape[1] >= 5:
+                obs_tensor = torch.tensor(obs_array[:, :5], dtype=torch.float)
+            elif obs_array.shape[1] >= 2:
+                obs_tensor = torch.tensor(obs_array[:, :2], dtype=torch.float)
+            else:
+                obs_tensor = torch.tensor(obs_array, dtype=torch.float)
 
         if isinstance(pred_data, pd.DataFrame):
             pred_tensor = torch.tensor(pred_data[["x", "y"]].values, dtype=torch.float)
         else:
-            pred_tensor = torch.tensor(pred_data, dtype=torch.float)
+            # numpy array인 경우 - x, y만 사용 (처음 2개 컬럼)
+            pred_array = np.array(pred_data)
+            pred_tensor = torch.tensor(pred_array[:, :2], dtype=torch.float)
 
         obs_data_list.append(obs_tensor)
         pred_data_list.append(pred_tensor)

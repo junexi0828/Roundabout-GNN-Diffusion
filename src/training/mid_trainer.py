@@ -127,8 +127,9 @@ class MIDTrainer:
         for batch_idx, batch in enumerate(pbar):
             # 데이터 준비
             if isinstance(batch, dict):
-                obs_data = batch.get('obs_data', batch.get('obs_trajectory'))
-                future_data = batch.get('future_data', batch.get('future_trajectory'))
+                # MID 모델은 x, y 좌표만 필요하므로 obs_trajectory 우선 사용
+                obs_data = batch.get('obs_trajectory', batch.get('obs_data'))
+                future_data = batch.get('future_trajectory', batch.get('future_data'))
                 graph_data = batch.get('graph_data', batch.get('graph'))
             else:
                 # DataLoader가 직접 반환하는 경우
@@ -254,8 +255,9 @@ class MIDTrainer:
             for batch in tqdm(self.val_loader, desc="Validation"):
                 # 데이터 준비
                 if isinstance(batch, dict):
-                    obs_data = batch.get('obs_data', batch.get('obs_trajectory'))
-                    future_data = batch.get('future_data', batch.get('future_trajectory'))
+                    # MID 모델은 x, y 좌표만 필요하므로 obs_trajectory 우선 사용
+                    obs_data = batch.get('obs_trajectory', batch.get('obs_data'))
+                    future_data = batch.get('future_trajectory', batch.get('future_data'))
                     graph_data = batch.get('graph_data', batch.get('graph'))
                 else:
                     obs_data = batch[0]
