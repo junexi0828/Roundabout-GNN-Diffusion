@@ -169,11 +169,38 @@ class ColabAutoPipeline:
 
         # PyTorch Geometric (pre-built wheels)
         print("  설치 중: torch-geometric...")
+
+        # Colab의 PyTorch 버전 확인
+        import torch
+        torch_version = torch.__version__.split('+')[0]  # 예: "2.5.1+cu121" -> "2.5.1"
+
+        # CUDA 버전 정확히 추출
+        if '+cu' in torch.__version__:
+            cuda_version = torch.__version__.split('+')[1]  # "cu121", "cu118" 등
+        else:
+            cuda_version = "cpu"
+
+        # PyTorch 버전에 맞는 wheel 사용
+        pyg_wheel_url = f"https://data.pyg.org/whl/torch-{torch_version}+{cuda_version}.html"
+
+        print(f"    PyTorch: {torch.__version__}")
+        print(f"    Detected CUDA: {cuda_version}")
+        print(f"    Wheel URL: {pyg_wheel_url}")
+
+        # 빌드 방지 환경변수 설정
+        import os
+        env = os.environ.copy()
+        env['TORCH_CUDA_ARCH_LIST'] = ""  # 빌드 비활성화
+        env['MAX_JOBS'] = "1"  # 최소 job 수
+        env['PIP_NO_BUILD_ISOLATION'] = "1"  # 빌드 격리 비활성화
+
         subprocess.run(
             [sys.executable, "-m", "pip", "install", "-q",
+             "--no-build-isolation",  # 빌드 비활성화 플래그
              "torch-geometric",
              "torch-scatter", "torch-sparse", "torch-cluster", "torch-spline-conv",
-             "-f", "https://data.pyg.org/whl/torch-2.1.0+cu118.html"],
+             "-f", pyg_wheel_url],
+            env=env,
             check=True
         )
 

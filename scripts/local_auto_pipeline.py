@@ -5,6 +5,7 @@ MacBook Air 및 일반 로컬 환경용
 사용법:
     python scripts/local_auto_pipeline.py --mode fast
     python scripts/local_auto_pipeline.py --mode full
+    python scripts/local_auto_pipeline.py --mode ultra_fast
 """
 
 import argparse
