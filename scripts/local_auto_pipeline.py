@@ -87,23 +87,27 @@ class LocalAutoPipeline:
     def check_environment(self):
         """1. 환경 확인"""
         print("\n[환경 확인]")
-        
+
         # Python 버전 확인 및 경고
         python_version = sys.version_info
         print(f"Python 버전: {sys.version}")
-        
+
         if python_version.major != 3 or python_version.minor not in [10, 11, 12]:
             if python_version.minor >= 13:
-                print("\n⚠️  경고: Python 3.13+는 PyTorch와 호환성 문제가 있을 수 있습니다.")
+                print(
+                    "\n⚠️  경고: Python 3.13+는 PyTorch와 호환성 문제가 있을 수 있습니다."
+                )
                 print("  권장: Python 3.10 사용")
             elif python_version.minor < 10:
                 print("\n⚠️  경고: Python 3.9 이하는 지원되지 않습니다.")
                 print("  권장: Python 3.10 사용")
-        
+
         # Python 3.10 사용 권장
         if python_version.minor != 10:
-            print(f"\n💡 권장: Python 3.10 사용 (현재: {python_version.major}.{python_version.minor})")
-        
+            print(
+                f"\n💡 권장: Python 3.10 사용 (현재: {python_version.major}.{python_version.minor})"
+            )
+
         print(f"프로젝트 경로: {self.project_root}")
 
         # 필수 라이브러리 확인
@@ -236,8 +240,47 @@ class LocalAutoPipeline:
             print("❌ 윈도우 생성 실패")
             return None
 
+    def train_baseline(self, data_dir: str, baseline_name: str = "a3tgcn"):
+        """GNN 기반 베이스라인 모델 학습"""
+        print(f"\n[GNN 모델 학습: {baseline_name.upper()}]")
+
+        if baseline_name == "a3tgcn":
+            train_script = (
+                self.project_root / "scripts" / "training" / "train_a3tgcn.py"
+            )
+            config_file = self.project_root / "configs" / "a3tgcn_config.yaml"
+        else:
+            print(f"⚠️  알 수 없는 베이스라인: {baseline_name}")
+            return False
+
+        if not train_script.exists():
+            print(f"⚠️  학습 스크립트 없음: {train_script}")
+            return False
+
+        print(f"  설정 파일: {config_file}")
+        print(f"  학습 스크립트: {train_script}")
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(train_script),
+                "--config",
+                str(config_file),
+                "--data_dir",
+                data_dir,
+            ],
+            cwd=self.project_root,
+        )
+
+        if result.returncode == 0:
+            print(f"\n✓ {baseline_name.upper()} 학습 완료")
+            return True
+        else:
+            print(f"\n⚠️  {baseline_name.upper()} 학습 중 오류 발생")
+            return False
+
     def train_model(self, data_dir: str):
-        """4. 모델 학습 (MID)"""
+        """MID 모델 학습 (GNN 다음 단계)"""
         print("\n[모델 학습: MID]")
 
         # 설정 파일 (모드별 우선순위)
@@ -246,13 +289,13 @@ class LocalAutoPipeline:
             self.project_root / "configs" / "mid_config_fast.yaml",
             self.project_root / "configs" / "mid_config_standard.yaml",
         ]
-        
+
         config_file = None
         for cfg in config_files:
             if cfg.exists():
                 config_file = cfg
                 break
-        
+
         if not config_file:
             print(f"⚠️  설정 파일 없음: {config_files[0]}")
             print("기본 설정 파일을 찾을 수 없습니다.")
@@ -301,7 +344,9 @@ class LocalAutoPipeline:
             print("⚠️  시각화 스크립트 없음")
             return
 
-        result = subprocess.run([sys.executable, str(viz_script)], cwd=self.project_root)
+        result = subprocess.run(
+            [sys.executable, str(viz_script)], cwd=self.project_root
+        )
 
         if result.returncode == 0:
             print("✓ 시각화 완료")
@@ -350,21 +395,38 @@ class LocalAutoPipeline:
             print(f"데이터 전처리 실패: {e}")
             return False
 
-        # 4. 모델 학습
+        # 4. GNN 모델 학습 (선택적 - ultra_fast 모드에서는 스킵)
+        if self.mode != "ultra_fast":
+            try:
+                # A3TGCN 학습 (GNN 기반)
+                a3tgcn_success = self.step(
+                    4, 6, "GNN 모델 학습 (A3TGCN)", 
+                    lambda: self.train_baseline(processed_dir, "a3tgcn")
+                )
+                if not a3tgcn_success:
+                    print("⚠️  A3TGCN 학습 실패했지만 계속 진행합니다...")
+            except Exception as e:
+                print(f"⚠️  A3TGCN 학습 실패: {e}")
+
+        # 5. MID 모델 학습 (GNN 다음 단계)
         try:
             success = self.step(
-                4, 5, "모델 학습 (MID)", lambda: self.train_model(processed_dir)
+                5 if self.mode != "ultra_fast" else 4, 
+                6 if self.mode != "ultra_fast" else 5,
+                "MID 모델 학습", 
+                lambda: self.train_model(processed_dir)
             )
             if not success:
-                print("⚠️  학습 실패")
+                print("⚠️  MID 학습 실패")
                 return False
         except Exception as e:
-            print(f"모델 학습 실패: {e}")
+            print(f"MID 모델 학습 실패: {e}")
             return False
 
-        # 5. 결과 시각화
+        # 6. 결과 시각화
+        step_num = 6 if self.mode != "ultra_fast" else 5
         try:
-            self.step(5, 5, "결과 시각화", self.visualize_results)
+            self.step(step_num, step_num, "결과 시각화", self.visualize_results)
         except Exception as e:
             print(f"시각화 실패: {e}")
 
@@ -390,7 +452,9 @@ def main():
         choices=["ultra_fast", "fast", "full"],
         help="실행 모드 (ultra_fast: 1시간, fast: 2-3시간, full: 6-8시간)",
     )
-    parser.add_argument("--data-dir", type=str, default=None, help="데이터 디렉토리 경로")
+    parser.add_argument(
+        "--data-dir", type=str, default=None, help="데이터 디렉토리 경로"
+    )
 
     args = parser.parse_args()
 

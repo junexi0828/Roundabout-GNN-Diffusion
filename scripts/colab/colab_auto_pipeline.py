@@ -144,23 +144,8 @@ class ColabAutoPipeline:
         """1. 환경 설정"""
         print("\n[환경 설정]")
 
-        # Python 버전 확인 및 경고
-        python_version = sys.version_info
+        # 시스템 정보
         print(f"Python 버전: {sys.version}")
-        
-        if python_version.major != 3 or python_version.minor not in [10, 11, 12]:
-            if python_version.minor >= 13:
-                print("\n⚠️  경고: Python 3.13+는 PyTorch와 호환성 문제가 있을 수 있습니다.")
-                print("  권장: Colab 런타임 > 런타임 유형 변경 > Python 3.10 선택")
-            elif python_version.minor < 10:
-                print("\n⚠️  경고: Python 3.9 이하는 지원되지 않습니다.")
-                print("  권장: Colab 런타임 > 런타임 유형 변경 > Python 3.10 선택")
-        
-        # Python 3.10 사용 권장
-        if python_version.minor != 10:
-            print(f"\n💡 권장: Python 3.10 사용 (현재: {python_version.major}.{python_version.minor})")
-            print("  Colab에서 변경: 런타임 > 런타임 유형 변경 > Python 3.10")
-        
         print(f"프로젝트 경로: {self.project_root}")
 
         # 필수 라이브러리 설치
@@ -618,8 +603,8 @@ class ColabAutoPipeline:
             return False
 
     def train_model(self, data_dir: str):
-        """6. 모델 학습 (HSG-Diffusion)"""
-        print("\n[모델 학습: HSG-Diffusion]")
+        """MID 모델 학습 (GNN 다음 단계)"""
+        print("\n[모델 학습: MID]")
 
         # 설정 파일 로드 또는 생성
         import yaml
@@ -875,32 +860,18 @@ class ColabAutoPipeline:
             print(f"❌ 데이터 전처리 실패: {e}")
             return False
 
-        # 모델 학습 (HSG-Diffusion)
-        try:
-            success = self.step(
-                6,
-                10,
-                "모델 학습 (HSG-Diffusion)",
-                lambda: self.train_model(processed_dir),
-            )
-            if not success:
-                print("⚠️  학습 실패했지만 계속 진행합니다...")
-        except Exception as e:
-            print(f"❌ 모델 학습 실패: {e}")
-            return False
-
         # ========================================================================
-        # 베이스라인 비교 (A3TGCN, Trajectron++)
+        # 1단계: GNN 기반 모델 학습 (A3TGCN, Trajectron++)
         # ultra_fast 모드에서는 스킵 (torch-geometric-temporal 미설치)
         # ========================================================================
 
         if self.mode != "ultra_fast":
-            # 베이스라인 학습 (A3TGCN)
+            # 베이스라인 학습 (A3TGCN) - GNN 기반
             try:
                 a3tgcn_success = self.step(
-                    7,
+                    6,
                     10,
-                    "베이스라인 학습 (A3TGCN)",
+                    "GNN 모델 학습 (A3TGCN)",
                     lambda: self.train_baseline(processed_dir, "a3tgcn"),
                 )
                 if not a3tgcn_success:
@@ -908,29 +879,50 @@ class ColabAutoPipeline:
             except Exception as e:
                 print(f"⚠️  A3TGCN 학습 실패: {e}")
 
-            # 베이스라인 학습 (Trajectron++)
+            # 베이스라인 학습 (Trajectron++) - GNN 기반
             try:
                 trajectron_success = self.step(
-                    8,
+                    7,
                     10,
-                    "베이스라인 학습 (Trajectron++)",
+                    "GNN 모델 학습 (Trajectron++)",
                     lambda: self.train_baseline(processed_dir, "trajectron"),
                 )
                 if not trajectron_success:
                     print("⚠️  Trajectron++ 학습 실패했지만 계속 진행합니다...")
             except Exception as e:
                 print(f"⚠️  Trajectron++ 학습 실패: {e}")
+        else:
+            print(
+                "\n⚠️  ultra_fast 모드: GNN 모델 학습 스킵 (torch-geometric-temporal 미설치)"
+            )
+            print("  A3TGCN과 Trajectron++ 학습을 건너뜁니다.")
+        # ========================================================================
 
-            # 비교 평가
+        # ========================================================================
+        # 2단계: MID 모델 학습 (GNN 다음 단계)
+        # ========================================================================
+        try:
+            success = self.step(
+                8 if self.mode != "ultra_fast" else 6,
+                10,
+                "MID 모델 학습",
+                lambda: self.train_model(processed_dir),
+            )
+            if not success:
+                print("⚠️  MID 학습 실패했지만 계속 진행합니다...")
+        except Exception as e:
+            print(f"❌ MID 모델 학습 실패: {e}")
+            return False
+        # ========================================================================
+
+        # ========================================================================
+        # 3단계: 베이스라인 비교 평가
+        # ========================================================================
+        if self.mode != "ultra_fast":
             try:
                 self.step(9, 10, "베이스라인 비교 평가", self.compare_baselines)
             except Exception as e:
                 print(f"⚠️  비교 평가 실패: {e}")
-        else:
-            print(
-                "\n⚠️  ultra_fast 모드: 베이스라인 학습 스킵 (torch-geometric-temporal 미설치)"
-            )
-            print("  A3TGCN과 Trajectron++ 학습을 건너뜁니다.")
         # ========================================================================
 
         # 시각화
