@@ -18,7 +18,7 @@ from src.training.data_loader import (
     create_dataloader,
     split_dataset
 )
-from src.integration.scene_graph import SceneGraphBuilder
+from src.scene_graph.scene_graph_builder import SceneGraphBuilder
 import pickle
 
 
