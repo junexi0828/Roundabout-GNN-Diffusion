@@ -13,7 +13,7 @@ source venv/bin/activate
 # 2. 자동 파이프라인 실행 (Fast 모드, 2-3시간)
 python scripts/local_auto_pipeline.py --mode fast
 
-# 또는 Full 모드 (6-8시간)
+# 또는 Full 모드 (6-8시간)햣
 python scripts/local_auto_pipeline.py --mode full
 ```
 

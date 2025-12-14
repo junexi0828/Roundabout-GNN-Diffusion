@@ -400,8 +400,10 @@ class LocalAutoPipeline:
             try:
                 # A3TGCN 학습 (GNN 기반)
                 a3tgcn_success = self.step(
-                    4, 6, "GNN 모델 학습 (A3TGCN)", 
-                    lambda: self.train_baseline(processed_dir, "a3tgcn")
+                    4,
+                    6,
+                    "GNN 모델 학습 (A3TGCN)",
+                    lambda: self.train_baseline(processed_dir, "a3tgcn"),
                 )
                 if not a3tgcn_success:
                     print("⚠️  A3TGCN 학습 실패했지만 계속 진행합니다...")
@@ -411,10 +413,10 @@ class LocalAutoPipeline:
         # 5. MID 모델 학습 (GNN 다음 단계)
         try:
             success = self.step(
-                5 if self.mode != "ultra_fast" else 4, 
+                5 if self.mode != "ultra_fast" else 4,
                 6 if self.mode != "ultra_fast" else 5,
-                "MID 모델 학습", 
-                lambda: self.train_model(processed_dir)
+                "MID 모델 학습",
+                lambda: self.train_model(processed_dir),
             )
             if not success:
                 print("⚠️  MID 학습 실패")
