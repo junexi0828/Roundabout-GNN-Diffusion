@@ -395,26 +395,11 @@ class LocalAutoPipeline:
             print(f"데이터 전처리 실패: {e}")
             return False
 
-        # 4. GNN 모델 학습 (선택적 - ultra_fast 모드에서는 스킵)
-        if self.mode != "ultra_fast":
-            try:
-                # A3TGCN 학습 (GNN 기반)
-                a3tgcn_success = self.step(
-                    4,
-                    6,
-                    "GNN 모델 학습 (A3TGCN)",
-                    lambda: self.train_baseline(processed_dir, "a3tgcn"),
-                )
-                if not a3tgcn_success:
-                    print("⚠️  A3TGCN 학습 실패했지만 계속 진행합니다...")
-            except Exception as e:
-                print(f"⚠️  A3TGCN 학습 실패: {e}")
-
-        # 5. MID 모델 학습 (GNN 다음 단계)
+        # 4. MID 모델 학습 (HSG-Diffusion 핵심)
         try:
             success = self.step(
-                5 if self.mode != "ultra_fast" else 4,
-                6 if self.mode != "ultra_fast" else 5,
+                4,
+                5,
                 "MID 모델 학습",
                 lambda: self.train_model(processed_dir),
             )
@@ -425,10 +410,9 @@ class LocalAutoPipeline:
             print(f"MID 모델 학습 실패: {e}")
             return False
 
-        # 6. 결과 시각화
-        step_num = 6 if self.mode != "ultra_fast" else 5
+        # 5. 결과 시각화
         try:
-            self.step(step_num, step_num, "결과 시각화", self.visualize_results)
+            self.step(5, 5, "결과 시각화", self.visualize_results)
         except Exception as e:
             print(f"시각화 실패: {e}")
 

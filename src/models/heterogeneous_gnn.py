@@ -99,10 +99,11 @@ class HeteroGAT(nn.Module):
         return out_dict
 
 
-class STHGNN(nn.Module):
+class HybridGNNMID(nn.Module):
     """
-    Spatio-Temporal Heterogeneous Graph Neural Network
-    HeteroGAT + A3TGCN 결합 모델
+    HeteroGAT + MID 결합 모델
+
+    이질적 그래프 구조와 Diffusion 기반 궤적 예측 결합
     """
 
     def __init__(
@@ -110,18 +111,21 @@ class STHGNN(nn.Module):
         node_types: List[str],
         edge_types: List[Tuple[str, str, str]],
         node_features: int = 9,
-        hidden_channels: int = 64,
+        hidden_channels: int = 128,
+        num_heads: int = 4,
+        obs_steps: int = 30,
         pred_steps: int = 50,
-        periods: int = 30
+        num_diffusion_steps: int = 100,
+        dropout: float = 0.1
     ):
-        """
-        Args:
-            node_types: 노드 타입 리스트
-            edge_types: 엣지 타입 리스트
-            node_features: 노드 특징 차원
-            hidden_channels: 은닉층 차원
-            pred_steps: 예측 스텝 수
-            periods: 시간 윈도우 길이
+        super().__init__()
+
+        self.node_types = node_types
+        self.edge_types = edge_types
+        self.hidden_channels = hidden_channels
+        self.obs_steps = obs_steps
+        self.pred_steps = pred_steps
+        self.num_diffusion_steps = num_diffusion_steps  # 추가!: 시간 윈도우 길이
         """
         super(STHGNN, self).__init__()
 

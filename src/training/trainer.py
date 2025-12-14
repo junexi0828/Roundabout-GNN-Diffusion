@@ -166,13 +166,12 @@ class ModelTrainer:
         """Learning Rate Scheduler 생성"""
         scheduler_type = self.config.get('scheduler', 'reduce_on_plateau')
 
-        if scheduler_type == 'reduce_on_plateau':
+        if scheduler_type == 'plateau':
             return optim.lr_scheduler.ReduceLROnPlateau(
                 self.optimizer,
                 mode='min',
                 factor=0.5,
-                patience=5,
-                verbose=True
+                patience=5
             )
         elif scheduler_type == 'step':
             step_size = self.config.get('scheduler_step_size', 30)
