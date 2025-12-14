@@ -520,7 +520,7 @@ class ColabAutoPipeline:
             return None
 
     def train_baseline(self, data_dir: str, baseline_name: str = "a3tgcn"):
-        """베이스라인 모델 학습"""
+        """베이스라인 모델 학습 (A3TGCN, Trajectron++)"""
         print(f"\n[베이스라인 학습: {baseline_name.upper()}]")
 
         if baseline_name == "a3tgcn":
@@ -528,6 +528,11 @@ class ColabAutoPipeline:
                 self.project_root / "scripts" / "training" / "train_a3tgcn.py"
             )
             config_file = self.project_root / "configs" / "a3tgcn_config.yaml"
+        elif baseline_name == "trajectron":
+            train_script = (
+                self.project_root / "scripts" / "training" / "train_trajectron.py"
+            )
+            config_file = self.project_root / "configs" / "trajectron_config.yaml"
         else:
             print(f"⚠️  알 수 없는 베이스라인: {baseline_name}")
             return False
@@ -823,34 +828,69 @@ class ColabAutoPipeline:
             print(f"❌ 모델 학습 실패: {e}")
             return False
 
-        # 베이스라인 학습 (A3TGCN)
-        try:
-            baseline_success = self.step(
-                7,
-                10,
-                "베이스라인 학습 (A3TGCN)",
-                lambda: self.train_baseline(processed_dir, "a3tgcn"),
-            )
-            if not baseline_success:
-                print("⚠️  베이스라인 학습 실패했지만 계속 진행합니다...")
-        except Exception as e:
-            print(f"⚠️  베이스라인 학습 실패: {e}")
+        # ========================================================================
+        # 베이스라인 비교 (추후 연구과제)
+        # ========================================================================
+        # A3TGCN, Trajectron++ 베이스라인 비교는 추후 연구로 남김
+        # 현재는 HSG-Diffusion 모델 검증에 집중
+        #
+        # 베이스라인 비교가 필요한 경우 아래 주석을 해제하여 사용하세요.
+        # ========================================================================
 
-        # 비교 평가
-        try:
-            self.step(8, 10, "베이스라인 비교 평가", self.compare_baselines)
-        except Exception as e:
-            print(f"⚠️  비교 평가 실패: {e}")
+        print("\n" + "=" * 80)
+        print("⏭️  [7/10] 베이스라인 학습 건너뜀 (추후 연구)")
+        print("=" * 80)
+        print("추후 연구 과제:")
+        print("  - A3TGCN 베이스라인 비교")
+        print("  - Trajectron++ 베이스라인 비교")
+        print("=" * 80)
+
+        # # 베이스라인 학습 (A3TGCN)
+        # try:
+        #     a3tgcn_success = self.step(
+        #         7,
+        #         10,
+        #         "베이스라인 학습 (A3TGCN)",
+        #         lambda: self.train_baseline(processed_dir, "a3tgcn"),
+        #     )
+        #     if not a3tgcn_success:
+        #         print("⚠️  A3TGCN 학습 실패했지만 계속 진행합니다...")
+        # except Exception as e:
+        #     print(f"⚠️  A3TGCN 학습 실패: {e}")
+        #
+        # # 베이스라인 학습 (Trajectron++)
+        # try:
+        #     trajectron_success = self.step(
+        #         7,
+        #         10,
+        #         "베이스라인 학습 (Trajectron++)",
+        #         lambda: self.train_baseline(processed_dir, "trajectron"),
+        #     )
+        #     if not trajectron_success:
+        #         print("⚠️  Trajectron++ 학습 실패했지만 계속 진행합니다...")
+        # except Exception as e:
+        #     print(f"⚠️  Trajectron++ 학습 실패: {e}")
+
+        print("\n" + "=" * 80)
+        print("⏭️  [8/10] 베이스라인 비교 평가 건너뜀 (추후 연구)")
+        print("=" * 80)
+
+        # # 비교 평가
+        # try:
+        #     self.step(8, 10, "베이스라인 비교 평가", self.compare_baselines)
+        # except Exception as e:
+        #     print(f"⚠️  비교 평가 실패: {e}")
+        # ========================================================================
 
         # 시각화
         try:
-            self.step(9, 10, "결과 시각화", self.visualize_results)
+            self.step(7, 8, "결과 시각화", self.visualize_results)
         except Exception as e:
             print(f"⚠️  시각화 실패: {e}")
 
         # 결과 저장
         try:
-            self.step(10, 10, "결과 저장", self.save_results)
+            self.step(8, 8, "결과 저장", self.save_results)
         except Exception as e:
             print(f"⚠️  결과 저장 실패: {e}")
 

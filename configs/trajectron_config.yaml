@@ -1,0 +1,170 @@
+# Trajectron++ 베이스라인 설정
+# Stanford ASL의 CVAE 기반 다중 모달 예측 모델
+
+# ============================================================================
+# 모델 설정
+# ============================================================================
+model:
+  name: "trajectron++"
+
+  hyperparams:
+    # CVAE 설정
+    k: 1                    # 학습 시 예측 모드 수
+    k_eval: 25              # 평가 시 샘플 수
+
+    # 시퀀스 길이
+    history_length: 30      # 과거 3.0초 (10Hz 기준), SDD 호환
+    future_length: 50       # 미래 5.0초, SDD 호환
+
+    # 맵 인코딩
+    map_encoding: false     # SDD는 HD Map 없음
+
+    # 동역학 모델
+    dynamics_integration: true
+
+    # 상태 표현
+    state:
+      P: ["x", "y"]         # 위치
+      V: ["x", "y"]         # 속도
+      A: ["x", "y"]         # 가속도
+
+    # 인코더 설정
+    encoder:
+      type: "lstm"
+      hidden_size: 128
+      num_layers: 2
+      dropout: 0.1
+
+    # 디코더 설정
+    decoder:
+      type: "lstm"
+      hidden_size: 128
+      num_layers: 2
+      dropout: 0.1
+
+# ============================================================================
+# 데이터 설정
+# ============================================================================
+data:
+  data_dir: "data/processed"
+
+  batch_size: 32
+  num_workers: 4
+  pin_memory: true
+
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+
+  # 데이터 증강
+  augmentation:
+    enabled: false
+    rotation: false
+    scaling: false
+
+# ============================================================================
+# 학습 설정
+# ============================================================================
+training:
+  optimizer: "adam"
+  learning_rate: 0.001
+  weight_decay: 0.0001
+
+  # Scheduler
+  scheduler: "reduce_on_plateau"
+  scheduler_patience: 5
+  scheduler_factor: 0.5
+
+  num_epochs: 100
+
+  # Gradient Clipping
+  max_grad_norm: 1.0
+
+  # Early Stopping
+  early_stopping:
+    patience: 15
+    min_delta: 0.001
+
+  # Loss 가중치
+  loss:
+    kl_weight: 0.1        # KL Divergence 가중치
+    nll_weight: 1.0       # Negative Log Likelihood 가중치
+
+# ============================================================================
+# 평가 설정
+# ============================================================================
+evaluation:
+  metrics:
+    - "ade"               # Average Displacement Error
+    - "fde"               # Final Displacement Error
+    - "kde_nll"           # KDE-based NLL
+
+  # 샘플링
+  num_samples: 25         # 다중 모드 샘플 수
+
+  eval_every: 5           # 평가 주기 (에폭)
+
+# ============================================================================
+# 로깅
+# ============================================================================
+logging:
+  log_dir: "runs/trajectron"
+  save_dir: "checkpoints/trajectron"
+
+  save_every: 10
+
+  tensorboard: true
+  log_images: false
+  log_every: 100
+
+  use_wandb: false
+
+# ============================================================================
+# 디바이스 설정
+# ============================================================================
+device:
+  use_cuda: true
+  device_id: 0
+  multi_gpu: false
+  gpu_ids: [0]
+
+# ============================================================================
+# 재현성
+# ============================================================================
+seed: 42
+deterministic: false
+
+# ============================================================================
+# Trajectron++ 특화 설정
+# ============================================================================
+trajectron:
+  # Scene Graph 설정
+  edge_encoding:
+    enabled: false        # SDD는 간단한 상호작용
+
+  # Attention 메커니즘
+  attention:
+    type: "temporal"      # temporal / spatial / both
+    num_heads: 4
+
+  # 노드 타입 (SDD는 단일 타입)
+  node_types:
+    - "PEDESTRIAN"
+
+  # 예측 목표
+  pred_state: ["x", "y"]  # 위치만 예측
+
+# ============================================================================
+# 참고
+# ============================================================================
+# Trajectron++ 공식 구현:
+#   https://github.com/StanfordASL/Trajectron-plus-plus
+#
+# 논문:
+#   "The Trajectron: Probabilistic Multi-Agent Trajectory Modeling with Dynamic Spatiotemporal Graphs"
+#   Salzmann et al., ICCV 2020
+#
+# 설치:
+#   pip install trajdata
+#   git clone https://github.com/StanfordASL/Trajectron-plus-plus.git
+#   cd Trajectron-plus-plus && pip install -e .
