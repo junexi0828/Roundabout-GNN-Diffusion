@@ -168,19 +168,11 @@ class ColabAutoPipeline:
             check=True
         )
 
-        # torch-geometric-temporal (A3TGCN용, 소스에서 빌드 방지)
-        print("  설치 중: torch-geometric-temporal...")
-        try:
-            # 먼저 pre-built wheel 시도
-            subprocess.run(
-                [sys.executable, "-m", "pip", "install", "-q",
-                 "torch-geometric-temporal", "--no-build-isolation"],
-                check=True,
-                timeout=60  # 60초 타임아웃
-            )
-        except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
-            print("    ⚠️  torch-geometric-temporal 설치 건너뜀 (A3TGCN 비활성화)")
-            # A3TGCN 없이도 HSG-Diffusion는 작동함
+        # torch-geometric-temporal (A3TGCN용)은 빌드 시간이 매우 오래 걸리므로 스킵
+        # HSG-Diffusion만 사용하면 이 패키지는 불필요함
+        # A3TGCN이 필요한 경우 수동 설치:
+        #   !pip install torch-geometric-temporal
+        print("  ⚠️  torch-geometric-temporal 스킵 (A3TGCN 비활성화)")
 
         print("✓ 라이브러리 설치 완료")
 
