@@ -157,7 +157,11 @@ class MIDTrainer:
                     if future_data is not None:
                         # 타임스텝 랜덤 샘플링
                         batch_size = future_data.size(0)
-                        num_steps = self.config.get('num_diffusion_steps', 100)
+                        # HybridGNNMID는 내부에 mid 모델을 가지고 있음
+                        if hasattr(self.model, 'mid'):
+                            num_steps = self.model.mid.num_diffusion_steps
+                        else:
+                            num_steps = self.model.num_diffusion_steps
                         t = torch.randint(
                             0, num_steps,
                             (batch_size,), device=self.device
@@ -165,7 +169,11 @@ class MIDTrainer:
 
                         # Forward diffusion (노이즈 추가)
                         noise = torch.randn_like(future_data)
-                        x_t = self.model.q_sample(future_data, t, noise)
+                        # HybridGNNMID는 내부에 mid 모델을 가지고 있음
+                        if hasattr(self.model, 'mid'):
+                            x_t = self.model.mid.q_sample(future_data, t, noise)
+                        else:
+                            x_t = self.model.q_sample(future_data, t, noise)
 
                         # 노이즈 예측
                         # 모델이 GNN을 사용하는지 확인
@@ -219,7 +227,11 @@ class MIDTrainer:
 
                     # Forward diffusion (노이즈 추가)
                     noise = torch.randn_like(future_data)
-                    x_t = self.model.q_sample(future_data, t, noise)
+                    # HybridGNNMID는 내부에 mid 모델을 가지고 있음
+                    if hasattr(self.model, 'mid'):
+                        x_t = self.model.mid.q_sample(future_data, t, noise)
+                    else:
+                        x_t = self.model.q_sample(future_data, t, noise)
 
                     # 노이즈 예측 (GNN 사용 여부에 따라 분기)
                     if hasattr(self.model, 'use_gnn') and self.model.use_gnn:
