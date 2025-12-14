@@ -174,49 +174,10 @@ class ColabAutoPipeline:
             [sys.executable, "-m", "pip", "install", "-q", "torch-geometric"],
             check=True,
         )
-
-        # torch-geometric-temporal (A3TGCN용)
-        if self.mode == "ultra_fast":
-            # ultra_fast 모드에서는 스킵 (빌드 시간 절약)
-            print("  ⚠️  torch-geometric-temporal 스킵 (ultra_fast 모드)")
-        else:
-            # fast/full 모드에서는 설치 (A3TGCN 학습 필요)
-            print("  설치 중: torch-geometric-temporal...")
-            # 버전 호환성 문제 해결: 최신 버전 시도, 실패 시 특정 버전
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "pip",
-                    "install",
-                    "-q",
-                    "torch-geometric-temporal",
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode != 0:
-                print("  ⚠️  최신 버전 설치 실패, 호환 버전 시도 중...")
-                print(f"  오류: {result.stderr[:200] if result.stderr else '알 수 없는 오류'}")
-                # 호환 가능한 버전 시도 (0.54.0은 대부분의 torch-geometric과 호환)
-                result2 = subprocess.run(
-                    [
-                        sys.executable,
-                        "-m",
-                        "pip",
-                        "install",
-                        "-q",
-                        "torch-geometric-temporal==0.54.0",
-                    ],
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                )
-                if result2.returncode != 0:
-                    print("  ⚠️  호환 버전(0.54.0) 설치도 실패")
-                    print(f"  오류: {result2.stderr[:200] if result2.stderr else '알 수 없는 오류'}")
-                    print("  ⚠️  torch-geometric-temporal 설치 실패, A3TGCN 학습은 건너뜁니다")
+                    )
+                    print(
+                        "  ⚠️  torch-geometric-temporal 설치 실패, A3TGCN 학습은 건너뜁니다"
+                    )
                 else:
                     print("  ✓ torch-geometric-temporal (0.54.0) 설치 완료")
             else:

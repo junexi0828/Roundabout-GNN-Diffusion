@@ -1,19 +1,25 @@
 """
-A3TGCN (Attention Temporal Graph Convolutional Network) 모델 구현
-PyTorch Geometric Temporal을 활용한 시공간 그래프 신경망
+Custom A3TGCN Implementation
+torch-geometric-temporal 대체 (Mac MPS 호환성 개선)
+
+GAT (Spatial) + LSTM (Temporal) 조합으로 동일한 기능 제공
 """
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric_temporal.nn.recurrent import A3TGCN2
 from torch_geometric.data import Data, Batch
 from typing import Optional, Tuple
+
+# 커스텀 ST Encoder 사용
+from src.models.st_encoder import SpatioTemporalEncoder
 
 
 class InteractionAwarePredictor(nn.Module):
     """
-    A3TGCN 기반 상호작용 인식 궤적 예측 모델
+    Custom Spatio-Temporal GNN 기반 궤적 예측 모델
+
+    torch-geometric-temporal의 A3TGCN을 GAT+LSTM으로 대체
     """
 
     def __init__(
@@ -30,7 +36,7 @@ class InteractionAwarePredictor(nn.Module):
         Args:
             node_features: 노드 특징 차원
             hidden_channels: 은닉층 채널 수
-            num_layers: A3TGCN 레이어 수
+            num_layers: ST Encoder 레이어 수
             periods: 시간 윈도우 길이 (look-back)
             pred_steps: 예측할 미래 스텝 수
             batch_size: 배치 크기
@@ -43,25 +49,14 @@ class InteractionAwarePredictor(nn.Module):
         self.pred_steps = pred_steps
         self.periods = periods
 
-        # A3TGCN 레이어
-        self.tgnn = A3TGCN2(
-            in_channels=node_features,
-            out_channels=hidden_channels,
-            periods=periods,
-            batch_size=batch_size
+        # Custom Spatio-Temporal Encoder (GAT + LSTM)
+        self.st_encoder = SpatioTemporalEncoder(
+            input_dim=node_features,
+            hidden_dim=hidden_channels,
+            num_heads=4,
+            num_layers=num_layers,
+            dropout=dropout
         )
-
-        # 추가 GNN 레이어 (선택사항)
-        self.gnn_layers = nn.ModuleList()
-        for _ in range(num_layers - 1):
-            self.gnn_layers.append(
-                A3TGCN2(
-                    in_channels=hidden_channels,
-                    out_channels=hidden_channels,
-                    periods=periods,
-                    batch_size=batch_size
-                )
-            )
 
         # Decoder: Hidden state -> Trajectory (x, y)
         self.decoder = nn.Sequential(
@@ -87,27 +82,32 @@ class InteractionAwarePredictor(nn.Module):
         Forward pass
 
         Args:
-            x: 노드 특징 [num_nodes, node_features]
+            x: 노드 특징 [Batch, Time, Nodes, Features] 또는 [Nodes, Features]
             edge_index: 엣지 인덱스 [2, num_edges]
             edge_weight: 엣지 가중치 (선택사항)
 
         Returns:
-            예측된 궤적 [num_nodes, pred_steps, 2] 또는 [num_nodes, 2 * pred_steps]
+            예측된 궤적 [Batch, Nodes, pred_steps, 2]
         """
-        # A3TGCN 통과
-        h = self.tgnn(x, edge_index)
-        h = F.relu(h)
+        # 입력 형태 확인 및 변환
+        if x.dim() == 2:
+            # [Nodes, Features] -> [1, 1, Nodes, Features]
+            x = x.unsqueeze(0).unsqueeze(0)
+        elif x.dim() == 3:
+            # [Batch, Nodes, Features] -> [Batch, 1, Nodes, Features]
+            x = x.unsqueeze(1)
 
-        # 추가 GNN 레이어
-        for gnn_layer in self.gnn_layers:
-            h = gnn_layer(h, edge_index)
-            h = F.relu(h)
+        # ST Encoder 통과
+        # x: [Batch, Time, Nodes, Features]
+        # output: [Batch, Nodes, Hidden]
+        h = self.st_encoder(x, edge_index, edge_weight)
 
         # Decoder
-        pred = self.decoder(h)  # [num_nodes, 2 * pred_steps]
+        pred = self.decoder(h)  # [Batch, Nodes, 2 * pred_steps]
 
-        # Reshape: [num_nodes, 2 * pred_steps] -> [num_nodes, pred_steps, 2]
-        pred = pred.view(-1, self.pred_steps, 2)
+        # Reshape: [Batch, Nodes, 2 * pred_steps] -> [Batch, Nodes, pred_steps, 2]
+        batch_size, num_nodes, _ = pred.size()
+        pred = pred.view(batch_size, num_nodes, self.pred_steps, 2)
 
         return pred
 
@@ -140,7 +140,7 @@ class InteractionAwarePredictor(nn.Module):
 
 class A3TGCNWithMap(nn.Module):
     """
-    맵 정보를 통합한 A3TGCN 모델
+    맵 정보를 통합한 Custom ST-GNN 모델
     맵 노드를 추가하여 회전교차로의 기하학적 제약을 반영
     """
 
@@ -161,12 +161,13 @@ class A3TGCNWithMap(nn.Module):
         # Map 특징 인코더
         self.map_encoder = nn.Linear(map_features, hidden_channels)
 
-        # A3TGCN (통합된 특징 사용)
-        self.tgnn = A3TGCN2(
-            in_channels=hidden_channels,
-            out_channels=hidden_channels,
-            periods=periods,
-            batch_size=batch_size
+        # Custom ST Encoder
+        self.st_encoder = SpatioTemporalEncoder(
+            input_dim=hidden_channels,
+            hidden_dim=hidden_channels,
+            num_heads=4,
+            num_layers=2,
+            dropout=0.1
         )
 
         # Decoder
@@ -186,31 +187,41 @@ class A3TGCNWithMap(nn.Module):
     ) -> torch.Tensor:
         """
         Args:
-            agent_x: 에이전트 노드 특징 [num_agents, agent_features]
-            map_x: 맵 노드 특징 [num_map_nodes, map_features] (선택사항)
+            agent_x: 에이전트 노드 특징 [Batch, Time, Agents, Features]
+            map_x: 맵 노드 특징 [Map_nodes, Features] (선택사항)
             edge_index: 엣지 인덱스 [2, num_edges]
         """
+        # 입력 형태 확인
+        if agent_x.dim() == 2:
+            agent_x = agent_x.unsqueeze(0).unsqueeze(0)
+        elif agent_x.dim() == 3:
+            agent_x = agent_x.unsqueeze(1)
+
+        batch_size, time_steps, num_agents, _ = agent_x.size()
+
         # 특징 인코딩
-        agent_h = self.agent_encoder(agent_x)
+        agent_h = self.agent_encoder(agent_x)  # [Batch, Time, Agents, Hidden]
 
         if map_x is not None:
-            map_h = self.map_encoder(map_x)
+            map_h = self.map_encoder(map_x)  # [Map_nodes, Hidden]
+            # 맵 특징을 시간/배치 차원으로 확장
+            map_h = map_h.unsqueeze(0).unsqueeze(0).expand(batch_size, time_steps, -1, -1)
             # Agent와 Map 특징 결합
-            x = torch.cat([agent_h, map_h], dim=0)
+            x = torch.cat([agent_h, map_h], dim=2)  # [Batch, Time, Agents+Map, Hidden]
         else:
             x = agent_h
 
-        # A3TGCN
-        h = self.tgnn(x, edge_index)
+        # ST Encoder
+        h = self.st_encoder(x, edge_index)  # [Batch, Agents+Map, Hidden]
         h = F.relu(h)
 
         # Agent 노드만 선택 (맵 노드는 예측 대상이 아님)
         if map_x is not None:
-            h = h[:agent_h.size(0)]
+            h = h[:, :num_agents, :]  # [Batch, Agents, Hidden]
 
         # Decoder
-        pred = self.decoder(h)
-        pred = pred.view(-1, self.pred_steps, 2)
+        pred = self.decoder(h)  # [Batch, Agents, 2 * pred_steps]
+        pred = pred.view(batch_size, -1, self.pred_steps, 2)
 
         return pred
 
