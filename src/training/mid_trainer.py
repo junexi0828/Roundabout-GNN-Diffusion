@@ -380,20 +380,24 @@ class MIDTrainer:
                     ultra_fast_config = self.config.get('ultra_fast_mode', {})
                     if not ultra_fast_config.get('enabled', False) or val_count <= 2:  # 처음 2개 배치만 샘플링
                         if future_data is not None:
+                            # Ultra fast 모드 설정
+                            num_samples = 3 if ultra_fast_config.get('enabled', False) else 20
+                            ddim_steps = 1 if ultra_fast_config.get('enabled', False) else 2
+                            
                             # HybridGNNMID는 graph_data를 받지만, MIDModel은 받지 않음
                             if hasattr(self.model, 'use_gnn') and self.model.use_gnn and graph_data is not None:
                                 samples = self.model.sample(
                                     graph_data=graph_data,
                                     obs_trajectory=obs_data,
-                                    num_samples=5,  # Ultra fast: 20 → 5
-                                    ddim_steps=1    # Ultra fast: 2 → 1
+                                    num_samples=num_samples,
+                                    ddim_steps=ddim_steps
                                 )
                             else:
                                 # MIDModel (graph_data 없이)
                                 samples = self.model.sample(
                                     obs_trajectory=obs_data,
-                                    num_samples=5,  # Ultra fast: 20 → 5
-                                    ddim_steps=1    # Ultra fast: 2 → 1
+                                    num_samples=num_samples,
+                                    ddim_steps=ddim_steps
                                 )
                             # 최소 ADE 샘플 선택
                             best_samples = samples[0]  # 첫 번째 샘플 사용 (실제로는 최소 ADE)
