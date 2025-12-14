@@ -9,6 +9,7 @@ import torch.nn as nn
 from typing import Dict, List, Optional, Tuple, Union
 import pandas as pd
 from pathlib import Path
+from torch_geometric.data import Data  # Type annotation용 추가
 
 from ..evaluation.safety_metrics import (
     SafetyMetricsCalculator,
@@ -309,7 +310,7 @@ class HybridPredictor:
     def predict_with_safety_check(
         self,
         obs_data: torch.Tensor,
-        graph_data: Optional[torch_geometric.data.Data] = None,
+        graph_data: Optional[Data] = None,
         return_risk: bool = False,
     ) -> Dict:
         """

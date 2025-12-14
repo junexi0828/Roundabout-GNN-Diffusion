@@ -144,7 +144,7 @@ class ColabAutoPipeline:
         packages = [
             "torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118",
             "torch-geometric",
-            "torch-geometric-temporal",
+            "torch-geometric-temporal",  # A3TGCN용 추가
             "pandas numpy scipy scikit-learn",
             "matplotlib seaborn opencv-python",
             "networkx tqdm pyyaml shapely tensorboard",
