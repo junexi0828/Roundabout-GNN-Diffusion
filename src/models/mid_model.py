@@ -16,7 +16,8 @@ import numpy as np
 from typing import Optional, Tuple, Dict, List
 import math
 
-from torch_geometric.data import Data, HeteroData
+from torch_geometric.data import Data, HeteroData, Batch
+from torch_geometric.nn import global_mean_pool
 
 
 class SinusoidalPositionalEmbedding(nn.Module):
@@ -635,40 +636,96 @@ class HybridGNNMID(nn.Module):
             elif graph_data is not None:
                 # 일반 GAT 사용 (ModuleList인 경우)
                 # HeteroGAT인 경우는 hetero_data가 필요하므로 여기서는 일반 GAT만 처리
-                x = graph_data.x
-                edge_index = graph_data.edge_index
+                
+                # Batch 객체인지 확인
+                if isinstance(graph_data, Batch):
+                    x = graph_data.x
+                    edge_index = graph_data.edge_index
+                    batch = graph_data.batch if hasattr(graph_data, "batch") else None
+                else:
+                    x = graph_data.x
+                    edge_index = graph_data.edge_index
+                    batch = None
+
+                # edge_index 차원 확인 및 수정
+                if edge_index is not None:
+                    if edge_index.dim() == 1:
+                        # 1차원인 경우 - 빈 edge_index이거나 잘못된 형태
+                        if edge_index.numel() == 0:
+                            # 빈 edge_index인 경우 빈 텐서 생성
+                            edge_index = torch.empty(
+                                (2, 0), dtype=torch.long, device=x.device
+                            )
+                        elif edge_index.numel() % 2 == 0:
+                            # 짝수 개의 원소가 있으면 2차원으로 변환
+                            edge_index = edge_index.view(2, -1)
+                        else:
+                            # 잘못된 형태 - 빈 텐서로 대체
+                            edge_index = torch.empty(
+                                (2, 0), dtype=torch.long, device=x.device
+                            )
+                    elif edge_index.dim() > 2:
+                        # 3차원 이상인 경우 첫 2차원만 사용
+                        edge_index = edge_index.view(2, -1)
+                    elif edge_index.size(0) != 2:
+                        # 첫 번째 차원이 2가 아닌 경우 전치
+                        if edge_index.size(1) == 2:
+                            edge_index = edge_index.t().contiguous()
+                        else:
+                            # 잘못된 형태 - 빈 텐서로 대체
+                            edge_index = torch.empty(
+                                (2, 0), dtype=torch.long, device=x.device
+                            )
+                else:
+                    # edge_index가 None인 경우 빈 텐서 생성
+                    edge_index = torch.empty((2, 0), dtype=torch.long, device=x.device)
 
                 # ModuleList인 경우 (일반 GAT)
                 if isinstance(self.gnn_encoder, nn.ModuleList):
-                    for layer in self.gnn_encoder:
-                        x = layer(x, edge_index)
+                    # edge_index가 비어있으면 GNN을 건너뛰고 입력만 사용
+                    if edge_index.size(1) > 0:
+                        for layer in self.gnn_encoder:
+                            x = layer(x, edge_index, batch=batch)
+                            x = F.relu(x)
+                    else:
+                        # 빈 그래프인 경우 선형 변환만 사용
+                        if not hasattr(self, "_empty_graph_encoder"):
+                            self._empty_graph_encoder = nn.Linear(
+                                x.size(1), self.hidden_dim
+                            ).to(x.device)
+                        x = self._empty_graph_encoder(x)
                         x = F.relu(x)
                 else:
-                    # HeteroGAT인 경우 - graph_data를 hetero_data로 변환
-                    # 단일 노드 타입으로 가정 (기본 타입 사용)
-                    if self.is_hetero and hasattr(self, 'gnn_encoder'):
-                        # 기본 노드 타입 사용 (첫 번째 노드 타입)
-                        default_node_type = self.gnn_encoder.node_types[0] if hasattr(self.gnn_encoder, 'node_types') else 'agent'
-                        
-                        # 일반 그래프를 이기종 그래프 형태로 변환
-                        x_dict = {default_node_type: x}
-                        # 기본 엣지 타입 생성
-                        if hasattr(self.gnn_encoder, 'edge_types') and self.gnn_encoder.edge_types:
-                            default_edge_type = self.gnn_encoder.edge_types[0]
-                            edge_index_dict = {default_edge_type: edge_index}
+                    # HeteroGAT인 경우 - 일반 GAT로 처리 불가
+                    # 입력 특징을 그대로 사용 (GNN 없이)
+                    if self.is_hetero:
+                        # HeteroGAT는 hetero_data가 필요하므로, 일반 그래프는 처리 불가
+                        if hasattr(self, "node_encoder"):
+                            x = self.node_encoder(x)
                         else:
-                            edge_index_dict = {(default_node_type, 'spatial', default_node_type): edge_index}
-                        
-                        # HeteroGAT forward
-                        out_dict = self.gnn_encoder(x_dict, edge_index_dict)
-                        # 모든 노드 타입의 임베딩 결합
-                        x = torch.cat(list(out_dict.values()), dim=0) if out_dict else x
+                            # 기본 선형 변환
+                            if not hasattr(self, "_fallback_encoder"):
+                                self._fallback_encoder = nn.Linear(
+                                    x.size(1), self.hidden_dim
+                                ).to(x.device)
+                            x = self._fallback_encoder(x)
+                            x = F.relu(x)
                     else:
                         # fallback: 입력 그대로 사용
                         pass
 
                 # 그래프 레벨 특징 (평균 풀링)
-                graph_embedding = torch.mean(x, dim=0, keepdim=True)  # [1, hidden_dim]
+                if batch is not None:
+                    # 배치별로 평균 풀링
+                    from torch_geometric.nn import global_mean_pool
+
+                    graph_embedding = global_mean_pool(
+                        x, batch
+                    )  # [batch_size, hidden_dim]
+                else:
+                    graph_embedding = torch.mean(
+                        x, dim=0, keepdim=True
+                    )  # [1, hidden_dim]
             else:
                 raise ValueError("graph_data or hetero_data required when use_gnn=True")
 
