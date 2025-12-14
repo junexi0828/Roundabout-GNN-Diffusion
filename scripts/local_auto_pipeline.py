@@ -240,44 +240,47 @@ class LocalAutoPipeline:
             print("❌ 윈도우 생성 실패")
             return None
 
-    def train_baseline(self, data_dir: str, baseline_name: str = "a3tgcn"):
-        """GNN 기반 베이스라인 모델 학습"""
-        print(f"\n[GNN 모델 학습: {baseline_name.upper()}]")
-
-        if baseline_name == "a3tgcn":
-            train_script = (
-                self.project_root / "scripts" / "training" / "train_a3tgcn.py"
-            )
-            config_file = self.project_root / "configs" / "a3tgcn_config.yaml"
-        else:
-            print(f"⚠️  알 수 없는 베이스라인: {baseline_name}")
-            return False
-
-        if not train_script.exists():
-            print(f"⚠️  학습 스크립트 없음: {train_script}")
-            return False
-
-        print(f"  설정 파일: {config_file}")
-        print(f"  학습 스크립트: {train_script}")
-
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(train_script),
-                "--config",
-                str(config_file),
-                "--data_dir",
-                data_dir,
-            ],
-            cwd=self.project_root,
-        )
-
-        if result.returncode == 0:
-            print(f"\n✓ {baseline_name.upper()} 학습 완료")
-            return True
-        else:
-            print(f"\n⚠️  {baseline_name.upper()} 학습 중 오류 발생")
-            return False
+    # ========================================================================
+    # 베이스라인 학습 메서드 (주석 처리 - 나중에 비교 실험 시 사용)
+    # ========================================================================
+    # def train_baseline(self, data_dir: str, baseline_name: str = "a3tgcn"):
+    #     """GNN 기반 베이스라인 모델 학습"""
+    #     print(f"\n[GNN 모델 학습: {baseline_name.upper()}]")
+    #
+    #     if baseline_name == "a3tgcn":
+    #         train_script = (
+    #             self.project_root / "scripts" / "training" / "train_a3tgcn.py"
+    #         )
+    #         config_file = self.project_root / "configs" / "a3tgcn_config.yaml"
+    #     else:
+    #         print(f"⚠️  알 수 없는 베이스라인: {baseline_name}")
+    #         return False
+    #
+    #     if not train_script.exists():
+    #         print(f"⚠️  학습 스크립트 없음: {train_script}")
+    #         return False
+    #
+    #     print(f"  설정 파일: {config_file}")
+    #     print(f"  학습 스크립트: {train_script}")
+    #
+    #     result = subprocess.run(
+    #         [
+    #             sys.executable,
+    #             str(train_script),
+    #             "--config",
+    #             str(config_file),
+    #             "--data_dir",
+    #             data_dir,
+    #         ],
+    #         cwd=self.project_root,
+    #     )
+    #
+    #     if result.returncode == 0:
+    #         print(f"\n✓ {baseline_name.upper()} 학습 완료")
+    #         return True
+    #     else:
+    #         print(f"\n⚠️  {baseline_name.upper()} 학습 중 오류 발생")
+    #         return False
 
     def train_model(self, data_dir: str):
         """MID 모델 학습 (GNN 다음 단계)"""
