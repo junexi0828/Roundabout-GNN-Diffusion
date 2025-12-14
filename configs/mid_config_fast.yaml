@@ -1,245 +1,163 @@
-# MID 빠른 학습 설정 (Fast Training Configuration)
-# 학습 시간을 크게 줄이면서 유의미한 결과를 내기 위한 최적화 설정
+# MID Fast 설정 - 1분 내 빠른 검증용 (Colab)
+# 성능보다 속도 우선! 개념 검증 및 디버깅용
 
 # ============================================================================
-# 모델 설정 (Model Configuration)
+# 모델 설정 (최소 크기)
 # ============================================================================
 model:
   name: "mid_fast"
 
-  # 관측/예측 스텝 (유지 - 데이터 형식과 일치해야 함)
-  obs_steps: 30      # 3초 관측 (10Hz)
-  pred_steps: 50     # 5초 예측 (10Hz)
+  obs_steps: 30      # 유지
+  pred_steps: 50     # 유지
 
-  # ⚡ 은닉층 차원 축소 (학습 속도 30-40% 향상)
-  # 원본: 256 → 빠른 학습: 64
-  # 성능 영향: 약 5-10% 감소 (허용 범위)
-  hidden_dim: 64     # 128 → 64로 축소 (메모리 75% 절감)
+  # ⚡⚡ 초소형 모델
+  hidden_dim: 32     # 64 → 32 (계산량 75% 감소)
 
-  # ⚡ Diffusion 스텝 대폭 축소 (학습 속도 50% 향상)
-  # 원본: 1000 → 표준: 100 → 빠른 학습: 50
-  # DDIM 사용 시 2-5 스텝으로 추론 가능
-  num_diffusion_steps: 50  # 100 → 50으로 축소
+  # ⚡⚡ Diffusion 스텝 최소화 (1분 내 완료용)
+  num_diffusion_steps: 10  # 50 → 10 (1분 내 완료)
 
-  # Beta 스케줄 (유지)
   beta_start: 0.0001
   beta_end: 0.02
 
-  # ⚡ Transformer 레이어 축소 (학습 속도 40% 향상)
-  # 원본: 6 layers → 빠른 학습: 2 layers
+  # ⚡⚡ 최소 Transformer
   denoiser:
-    num_layers: 2      # 4 → 2로 축소
-    num_heads: 4       # 8 → 4로 축소
-    dropout: 0.2       # 0.1 → 0.2 (정규화 강화로 과적합 방지)
+    num_layers: 1      # 2 → 1
+    num_heads: 2       # 4 → 2
+    dropout: 0.1
 
-  # 관측 인코더 (LSTM 사용 - Transformer보다 빠름)
+  # ⚡⚡ 최소 인코더
   encoder:
-    type: "lstm"       # "transformer" 대신 "lstm" 사용
-    num_layers: 1      # 2 → 1로 축소
+    type: "lstm"
+    num_layers: 1
     use_transformer: false
 
-  # GNN 설정 (선택적 사용)
-  use_gnn: true
-  gnn:
-    num_layers: 1      # 2 → 1로 축소
-    heads: 2           # 4 → 2로 축소
+  # ⚡⚡ GNN 비활성화 (속도 우선)
+  use_gnn: false
 
 # ============================================================================
-# 데이터 설정 (Data Configuration)
+# 데이터 설정 (최소 샘플)
 # ============================================================================
 data:
   data_dir: "data/processed"
 
-  # ⚡ 배치 크기 증가 (GPU 활용률 향상, 학습 속도 30% 향상)
-  # 원본: 32 → 빠른 학습: 64
-  # GPU 메모리 부족 시 32로 조정
-  batch_size: 64     # 32 → 64로 증가
+  # ⚡⚡ 배치 크기 최대화 (1분 내 완료용)
+  batch_size: 256    # 64 → 256 (더 빠른 처리)
 
   num_workers: 4     # 데이터 로딩 병렬화
   pin_memory: true   # GPU 전송 속도 향상
 
-  # ⚡ 데이터 샘플링 (초기 실험용 - 학습 시간 70% 단축)
-  # 전체 학습 시: use_sampling: false로 변경
+  # ⚡⚡ 극소량 데이터 (1% - 1분 내 완료용)
   use_sampling: true
-  sample_ratio: 0.3  # 30%만 사용 (빠른 검증용)
+  sample_ratio: 0.01  # 30% → 1% (1분 내 완료)
 
-  # 데이터 분할
-  train_ratio: 0.7
-  val_ratio: 0.15
-  test_ratio: 0.15
+  train_ratio: 0.8    # 검증/테스트 줄이기
+  val_ratio: 0.1
+  test_ratio: 0.1
 
-  # 씬 그래프 사용 (GNN 활성화 시 필수)
-  use_scene_graph: true   # GNN 사용 시 true
-
-  # 데이터 증강 (빠른 학습 시 비활성화)
   augmentation:
-    enabled: false   # true → false (증강 시간 절약)
+    enabled: false
 
 # ============================================================================
-# 학습 설정 (Training Configuration)
+# 학습 설정 (초고속)
 # ============================================================================
 training:
-  # ⚡ 학습률 증가 (수렴 속도 향상)
-  # 원본: 0.0001 → 빠른 학습: 0.0003
-  # 너무 높으면 불안정할 수 있으므로 주의
+  # ⚡⚡ 높은 학습률 (빠른 수렴)
   optimizer: "adamw"
-  learning_rate: 0.0003  # 0.0001 → 0.0003 (3배 증가)
+  learning_rate: 0.001   # 0.0003 → 0.001 (3배 빠른 수렴)
   weight_decay: 0.0001
   betas: [0.9, 0.999]
 
-  # ⚡ Scheduler 설정 (빠른 수렴)
+  # ⚡⚡ Scheduler
   scheduler: "cosine"
-  warmup_epochs: 3      # 10 → 3으로 축소
-  min_lr: 0.00001
+  warmup_epochs: 1      # 3 → 1
+  min_lr: 0.0001
 
-  # ⚡ 에폭 수 축소 (학습 시간 50% 단축)
-  # 원본: 200 → 빠른 학습: 50
-  # Early stopping으로 최적 지점에서 자동 종료
-  num_epochs: 50        # 100 → 50으로 축소
+  # ⚡⚡ 에폭 최소화 (1분 내 완료용)
+  num_epochs: 1         # 50 → 1 (1분 내 완료)
 
-  # Gradient clipping (안정성 유지)
   max_grad_norm: 1.0
 
-  # ⚡ Early Stopping (불필요한 학습 방지)
+  # ⚡⚡ 조기 종료 강화
   early_stopping:
-    patience: 10        # 20 → 10으로 축소
-    min_delta: 0.001
+    patience: 5         # 10 → 5
+    min_delta: 0.01     # 0.001 → 0.01 (더 관대하게)
 
-  # 손실 함수
   loss:
-    type: "mse"         # Diffusion 표준 손실
+    type: "mse"
     weight_position: 1.0
 
-  # ⚡ Mixed Precision Training (학습 속도 40-50% 향상)
-  # GPU 메모리 절약 + 속도 향상
-  use_amp: true         # 반드시 활성화!
+  # ⚡⚡ Mixed Precision 필수
+  use_amp: true
 
-  # Gradient Checkpointing (메모리 절약, 속도 약간 감소)
-  gradient_checkpointing: false  # 빠른 학습 시 비활성화
+  gradient_checkpointing: false
 
 # ============================================================================
-# 평가 설정 (Evaluation Configuration)
+# 평가 설정 (최소화)
 # ============================================================================
 evaluation:
-  # 평가 지표
   metrics:
     - "ade"
     - "fde"
 
-  # ⚡ 샘플링 설정 (추론 속도 향상)
-  num_samples: 10      # 20 → 10으로 축소 (평가 시간 50% 단축)
-  ddim_steps: 2        # DDIM 빠른 샘플링 (50 steps → 2 steps)
-  ddim_eta: 0.0        # Deterministic 샘플링
+  # ⚡⚡ 최소 샘플링 (1분 내 완료용)
+  num_samples: 3       # 5 → 3 (더 빠른 평가)
+  ddim_steps: 1        # 2 → 1 (더 빠른 샘플링)
+  ddim_eta: 0.0
 
-  # ⚡ 평가 주기 증가 (평가 시간 절약)
-  eval_every: 5        # 2 → 5 에폭마다 평가
+  # ⚡⚡ 평가 최소화 (1분 내 완료용)
+  eval_every: 1        # 매 에폭마다 (1 에폭만 실행)
 
 # ============================================================================
-# 로깅 및 저장 (Logging & Checkpointing)
+# 로깅 (최소화)
 # ============================================================================
 logging:
   log_dir: "runs/mid_fast"
   save_dir: "checkpoints/mid_fast"
 
-  # ⚡ 저장 주기 증가 (I/O 시간 절약)
-  save_every: 10       # 5 → 10 에폭마다 저장
+  # ⚡⚡ 저장 최소화 (1분 내 완료용)
+  save_every: 1        # 매 에폭마다 저장 (1 에폭만)
 
-  # TensorBoard
   tensorboard: true
-  log_images: false    # true → false (시각화 시간 절약)
-  log_every: 200       # 100 → 200 스텝마다 로깅
+  log_images: false
+  log_every: 500       # 200 → 500
 
-  # Wandb (선택)
   use_wandb: false
 
 # ============================================================================
-# 디바이스 설정 (Device Configuration)
+# 디바이스 설정
 # ============================================================================
 device:
   use_cuda: true
   device_id: 0
-
-  # 멀티 GPU (사용 가능 시 활성화)
   multi_gpu: false
   gpu_ids: [0]
 
 # ============================================================================
-# 빠른 학습 모드 (Fast Mode Options)
+# Ultra Fast 모드 (1분 내 완료용)
 # ============================================================================
-fast_mode:
+ultra_fast_mode:
   enabled: true
 
-  # ⚡ 추가 최적화
-  reduce_val_frequency: true   # 검증 빈도 감소
-  skip_test: true              # 테스트 스킵 (학습 후 별도 실행)
-  cache_data: true             # 데이터 캐싱 (메모리 충분 시)
-
-  # 디버그 모드
-  debug_mode: false
-  max_batches_per_epoch: null  # null = 전체, 숫자 = 제한 (디버깅용)
+  # ⚡⚡ 추가 최적화 (1분 내 완료용)
+  skip_validation_until_epoch: 1   # 1 에폭까지 검증 스킵 (1 에폭만 실행하므로 사실상 스킵)
+  max_train_batches: 10            # 학습 배치 10개만 (1분 내 완료)
+  max_val_batches: 5               # 검증 배치 5개만 (1분 내 완료)
+  cache_data: true                  # 데이터 캐싱
+  deterministic: false              # 속도 우선
 
 # ============================================================================
-# 재현성 (Reproducibility)
+# 재현성
 # ============================================================================
 seed: 42
-deterministic: false  # true → false (속도 우선)
+deterministic: false  # 속도 우선
 
 # ============================================================================
-# 예상 학습 시간 (Estimated Training Time)
+# 예상 시간 (Colab T4 기준)
 # ============================================================================
 #
-# 설정별 예상 시간 (GTX 1080 Ti 기준):
+# Fast 모드 (1분 내 완료):
+# - Colab (T4 GPU): 1분 이내 ⚡⚡⚡
 #
-# 1. 원본 설정 (hidden_dim=256, steps=1000, epochs=200):
-#    - 학습 시간: ~24-30시간
-#    - 성능: 100% (기준)
-#
-# 2. 표준 설정 (hidden_dim=128, steps=100, epochs=100):
-#    - 학습 시간: ~12-15시간
-#    - 성능: ~95%
-#
-# 3. 이 설정 (hidden_dim=64, steps=50, epochs=50, 30% 데이터):
-#    - 학습 시간: ~2-3시간 ⚡
-#    - 성능: ~85-90%
-#
-# 4. 전체 데이터 (sample_ratio=1.0):
-#    - 학습 시간: ~6-8시간
-#    - 성능: ~90-95%
-#
-# ============================================================================
-# 성능 vs 속도 트레이드오프
-# ============================================================================
-#
-# 최적화 항목별 영향:
-#
-# | 항목 | 속도 향상 | 성능 영향 | 우선순위 |
-# |------|----------|----------|---------|
-# | hidden_dim 축소 | 30-40% | -5~10% | 높음 |
-# | diffusion_steps 축소 | 50% | -3~5% | 높음 |
-# | 레이어 수 축소 | 40% | -5~8% | 중간 |
-# | 배치 크기 증가 | 30% | +2~5% | 높음 |
-# | 학습률 증가 | 20% | ±0% | 중간 |
-# | 에폭 수 축소 | 50% | -0% (ES) | 높음 |
-# | 데이터 샘플링 | 70% | -10~15% | 높음 |
-# | Mixed Precision | 40-50% | ±0% | 매우높음 |
-#
-# 총 예상 속도 향상: 80-90% (10-20배 빠름)
-# 총 예상 성능 감소: 10-15% (허용 범위)
-#
-# ============================================================================
-# 사용 방법
-# ============================================================================
-#
-# 1. 빠른 실험 (2-3시간):
-#    python scripts/train_mid.py --config configs/mid_config_fast.yaml
-#
-# 2. 전체 데이터 학습 (6-8시간):
-#    - sample_ratio: 1.0으로 변경
-#    - num_epochs: 100으로 증가
-#
-# 3. 최고 성능 (12-15시간):
-#    - hidden_dim: 128로 증가
-#    - num_diffusion_steps: 100으로 증가
-#    - denoiser.num_layers: 4로 증가
+# 성능: ~50-60% (디버깅/개념검증용)
 #
 # ============================================================================
