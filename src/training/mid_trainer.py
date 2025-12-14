@@ -231,7 +231,7 @@ class MIDTrainer:
                     if hasattr(self.model, 'mid'):
                         x_t = self.model.mid.q_sample(future_data, t, noise)
                     else:
-                    x_t = self.model.q_sample(future_data, t, noise)
+                        x_t = self.model.q_sample(future_data, t, noise)
 
                     # 노이즈 예측 (GNN 사용 여부에 따라 분기)
                     if hasattr(self.model, 'use_gnn') and self.model.use_gnn:
@@ -341,7 +341,7 @@ class MIDTrainer:
                     if hasattr(self.model, 'mid'):
                         x_t = self.model.mid.q_sample(future_data, t, noise)
                     else:
-                    x_t = self.model.q_sample(future_data, t, noise)
+                        x_t = self.model.q_sample(future_data, t, noise)
 
                     # 노이즈 예측
                     pred_noise = self.model(
@@ -359,12 +359,12 @@ class MIDTrainer:
                 if future_data is not None:
                     # HybridGNNMID는 graph_data를 받지만, MIDModel은 받지 않음
                     if hasattr(self.model, 'use_gnn') and self.model.use_gnn and graph_data is not None:
-                    samples = self.model.sample(
-                        graph_data=graph_data,
-                        obs_trajectory=obs_data,
-                        num_samples=20,
-                        ddim_steps=2
-                    )
+                        samples = self.model.sample(
+                            graph_data=graph_data,
+                            obs_trajectory=obs_data,
+                            num_samples=20,
+                            ddim_steps=2
+                        )
                     else:
                         # MIDModel (graph_data 없이)
                         samples = self.model.sample(
