@@ -18,6 +18,7 @@ from src.training.data_loader import (
     create_dataloader,
     split_dataset
 )
+from src.integration.scene_graph import SceneGraphBuilder
 import pickle
 
 
@@ -55,7 +56,7 @@ def setup_device(config: dict) -> torch.device:
     return device
 
 
-def create_data_loaders(windows, config: dict):
+def create_data_loaders(windows, config: dict, scene_graph_builder=None):
     """데이터 로더 생성"""
     # 데이터 분할
     train_windows, val_windows, test_windows = split_dataset(
@@ -69,9 +70,23 @@ def create_data_loaders(windows, config: dict):
     print(f"  검증: {len(val_windows)}개")
     print(f"  테스트: {len(test_windows)}개")
 
+    # 씬 그래프 사용 여부 확인
+    use_scene_graph = config['data'].get('use_scene_graph', True)
+    if use_scene_graph and scene_graph_builder is None:
+        scene_graph_builder = SceneGraphBuilder(spatial_threshold=20.0)
+        print("  ✓ 씬 그래프 빌더 생성")
+
     # 데이터셋 생성
-    train_dataset = TrajectoryDataset(train_windows)
-    val_dataset = TrajectoryDataset(val_windows)
+    train_dataset = TrajectoryDataset(
+        train_windows,
+        scene_graph_builder=scene_graph_builder,
+        use_scene_graph=use_scene_graph
+    )
+    val_dataset = TrajectoryDataset(
+        val_windows,
+        scene_graph_builder=scene_graph_builder,
+        use_scene_graph=use_scene_graph
+    )
 
     # 데이터 로더 생성
     train_loader = create_dataloader(

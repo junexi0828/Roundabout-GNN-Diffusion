@@ -68,6 +68,9 @@ data:
   val_ratio: 0.15
   test_ratio: 0.15
 
+  # 씬 그래프 사용 (GNN 활성화 시 필수)
+  use_scene_graph: true   # GNN 사용 시 true
+
   # 데이터 증강 (빠른 학습 시 비활성화)
   augmentation:
     enabled: false   # true → false (증강 시간 절약)
