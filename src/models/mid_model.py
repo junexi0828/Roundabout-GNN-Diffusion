@@ -540,6 +540,7 @@ class HybridGNNMID(nn.Module):
     ):
         super(HybridGNNMID, self).__init__()
 
+        self.hidden_dim = hidden_dim
         self.use_gnn = use_gnn
         self.use_hetero_gnn = use_hetero_gnn and use_gnn
 
@@ -717,9 +718,13 @@ class HybridGNNMID(nn.Module):
                 # 그래프 레벨 특징 (평균 풀링)
                 if batch is not None:
                     # 배치별로 평균 풀링
-                    graph_embedding = global_mean_pool(x, batch)  # [batch_size, hidden_dim]
+                    graph_embedding = global_mean_pool(
+                        x, batch
+                    )  # [batch_size, hidden_dim]
                 else:
-                    graph_embedding = torch.mean(x, dim=0, keepdim=True)  # [1, hidden_dim]
+                    graph_embedding = torch.mean(
+                        x, dim=0, keepdim=True
+                    )  # [1, hidden_dim]
             else:
                 raise ValueError("graph_data or hetero_data required when use_gnn=True")
 
