@@ -713,21 +713,36 @@ class ColabAutoPipeline:
         """8. 결과 시각화"""
         print("\n[결과 시각화]")
 
-        # 시각화 스크립트 실행
+        # 기본 시각화 스크립트 실행
         viz_script = self.project_root / "scripts" / "utils" / "visualize_results.py"
 
-        if not viz_script.exists():
-            print("⚠️  시각화 스크립트 없음")
-            return
+        if viz_script.exists():
+            result = subprocess.run(
+                [sys.executable, str(viz_script)], cwd=self.project_root
+            )
 
-        result = subprocess.run(
-            [sys.executable, str(viz_script)], cwd=self.project_root
-        )
+            if result.returncode == 0:
+                print("✓ 기본 시각화 완료")
+            else:
+                print("⚠️  기본 시각화 중 오류 발생")
 
-        if result.returncode == 0:
-            print("✓ 시각화 완료")
+        # 종합 분석 샘플 데이터 생성
+        analysis_script = self.project_root / "scripts" / "evaluation" / "generate_sample_analysis.py"
+
+        if analysis_script.exists():
+            print("\n[종합 분석 샘플 데이터 생성]")
+            result = subprocess.run(
+                [sys.executable, str(analysis_script),
+                 "--output_dir", "results/analysis"],
+                cwd=self.project_root
+            )
+
+            if result.returncode == 0:
+                print("✓ 종합 분석 샘플 데이터 생성 완료")
+            else:
+                print("⚠️  종합 분석 생성 중 오류 발생")
         else:
-            print("⚠️  시각화 중 오류 발생")
+            print("⚠️  종합 분석 스크립트 없음")
 
     def save_results(self):
         """9. 결과 저장 (Google Drive)"""
