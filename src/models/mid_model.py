@@ -16,7 +16,7 @@ import numpy as np
 from typing import Optional, Tuple, Dict, List
 import math
 
-from torch_geometric.data import Data
+from torch_geometric.data import Data, HeteroData
 
 
 class SinusoidalPositionalEmbedding(nn.Module):
