@@ -141,21 +141,46 @@ class ColabAutoPipeline:
 
         # 필수 라이브러리 설치
         print("\n[라이브러리 설치]")
-        packages = [
+
+        # PyTorch 및 기본 패키지
+        basic_packages = [
             "torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118",
-            "torch-geometric",
-            "torch-geometric-temporal",  # A3TGCN용 추가
             "pandas numpy scipy scikit-learn",
             "matplotlib seaborn opencv-python",
             "networkx tqdm pyyaml shapely tensorboard",
             "xxhash aiohttp psutil requests",
         ]
 
-        for pkg in packages:
+        for pkg in basic_packages:
             print(f"  설치 중: {pkg.split()[0]}...")
             subprocess.run(
-                [sys.executable, "-m", "pip", "install", "-q"] + pkg.split(), check=True
+                [sys.executable, "-m", "pip", "install", "-q"] + pkg.split(),
+                check=True
             )
+
+        # PyTorch Geometric (pre-built wheels)
+        print("  설치 중: torch-geometric...")
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-q",
+             "torch-geometric",
+             "torch-scatter", "torch-sparse", "torch-cluster", "torch-spline-conv",
+             "-f", "https://data.pyg.org/whl/torch-2.1.0+cu118.html"],
+            check=True
+        )
+
+        # torch-geometric-temporal (A3TGCN용, 소스에서 빌드 방지)
+        print("  설치 중: torch-geometric-temporal...")
+        try:
+            # 먼저 pre-built wheel 시도
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-q",
+                 "torch-geometric-temporal", "--no-build-isolation"],
+                check=True,
+                timeout=60  # 60초 타임아웃
+            )
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
+            print("    ⚠️  torch-geometric-temporal 설치 건너뜀 (A3TGCN 비활성화)")
+            # A3TGCN 없이도 HSG-Diffusion는 작동함
 
         print("✓ 라이브러리 설치 완료")
 
@@ -419,90 +444,79 @@ class ColabAutoPipeline:
         return str(sdd_dir) if sdd_dir.exists() else None
 
     def preprocess_data(self, data_path: str):
-        """5. 데이터 전처리"""
+        """5. 데이터 전처리 (CSV → 윈도우 생성)"""
         print("\n[데이터 전처리]")
 
         data_path_obj = Path(data_path)
-
-        # 이미 전처리된 데이터가 있는지 확인
         processed_dir = self.project_root / "data" / "processed"
-        if processed_dir.exists():
-            pkl_files = list(processed_dir.glob("*.pkl"))
-            if pkl_files:
-                print(f"✓ 이미 전처리된 데이터 발견: {processed_dir}")
-                print(f"  파일: {len(pkl_files)}개")
-                return str(processed_dir)
 
-        # converted 데이터가 있으면 이미 전처리된 것으로 간주
-        if "converted" in str(data_path_obj):
-            print(f"✓ 변환된 데이터 사용: {data_path_obj}")
-            # 윈도우 생성만 수행
+        # 윈도우 pkl 파일이 이미 있는지 확인
+        windows_file = processed_dir / "sdd_windows.pkl"
+        if windows_file.exists():
+            print(f"✓ 윈도우 파일 이미 존재: {windows_file}")
+            return str(processed_dir)
+
+        # CSV가 아닌 경우 (원본 데이터) - CSV로 변환
+        if "converted" not in str(data_path_obj):
+            converted_dir = self.project_root / "data" / "sdd" / "converted"
+            if not converted_dir.exists() or not list(converted_dir.glob("*.csv")):
+                print("CSV 변환 중...")
+                if not self.preprocess_sdd_data(data_path_obj, converted_dir):
+                    print("❌ CSV 변환 실패")
+                    return None
+            data_path_obj = converted_dir
+
+        # CSV → 윈도우 pkl 변환
+        print(f"\n[윈도우 생성] {data_path_obj} → {windows_file}")
+
+        preprocess_script = self.project_root / "scripts" / "data" / "preprocess_sdd.py"
+        if not preprocess_script.exists():
+            print(f"⚠️  전처리 스크립트 없음: {preprocess_script}")
+            # 대체: 직접 윈도우 생성
             try:
                 from src.integration.sdd_data_adapter import SDDDataAdapter
+                import pickle
 
                 adapter = SDDDataAdapter()
                 windows = adapter.load_and_preprocess(data_path_obj)
 
-                output_dir = self.project_root / "data" / "processed"
-                output_dir.mkdir(parents=True, exist_ok=True)
-
-                import pickle
-
-                with open(output_dir / "sdd_windows.pkl", "wb") as f:
+                processed_dir.mkdir(parents=True, exist_ok=True)
+                with open(windows_file, "wb") as f:
                     pickle.dump(windows, f)
 
                 print(f"✓ 윈도우 생성 완료: {len(windows)}개")
-                return str(output_dir)
+                return str(processed_dir)
             except Exception as e:
-                print(f"⚠️  윈도우 생성 실패: {e}")
-                print("  변환된 CSV 파일 직접 사용")
-                return data_path
+                print(f"❌ 윈도우 생성 실패: {e}")
+                import traceback
+                traceback.print_exc()
+                return None
 
-        # 전처리 스크립트 실행
-        preprocess_script = self.project_root / "scripts" / "data" / "preprocess_sdd.py"
-
-        if not preprocess_script.exists():
-            print("⚠️  전처리 스크립트 없음, 기본 전처리 수행")
-            # 간단한 전처리
-            try:
-                from src.data_processing.preprocessor import TrajectoryPreprocessor
-                from src.integration.sdd_data_adapter import SDDDataAdapter
-                import pandas as pd
-
-                # 데이터 로드 및 전처리
-                adapter = SDDDataAdapter()
-                windows = adapter.load_and_preprocess(data_path_obj)
-
-                # 저장
-                output_dir = self.project_root / "data" / "processed"
-                output_dir.mkdir(parents=True, exist_ok=True)
-
-                import pickle
-
-                with open(output_dir / "sdd_windows.pkl", "wb") as f:
-                    pickle.dump(windows, f)
-
-                print(f"✓ 전처리 완료: {len(windows)}개 윈도우")
-                return str(output_dir)
-            except Exception as e:
-                print(f"⚠️  전처리 실패: {e}")
-                print("  이미 전처리된 데이터 사용")
-                return data_path
-
-        # 전처리 스크립트 실행
+        # preprocess_sdd.py 실행
         result = subprocess.run(
-            [sys.executable, str(preprocess_script), "--data_dir", data_path],
+            [
+                sys.executable,
+                str(preprocess_script),
+                "--data_dir",
+                str(data_path_obj),
+                "--output_dir",
+                str(processed_dir),
+                "--sample_ratio",
+                str(self.config["data_sample_ratio"]),
+            ],
             cwd=self.project_root,
             capture_output=True,
             text=True,
         )
 
-        if result.returncode == 0:
-            print("✓ 전처리 완료")
-            return "data/processed"
+        if result.returncode == 0 and windows_file.exists():
+            print(f"✓ 윈도우 생성 완료: {windows_file}")
+            return str(processed_dir)
         else:
-            print(f"⚠️  전처리 오류: {result.stderr}")
-            return "data/processed"
+            print(f"❌ 윈도우 생성 실패")
+            if result.stderr:
+                print(f"오류: {result.stderr}")
+            return None
 
     def train_baseline(self, data_dir: str, baseline_name: str = "a3tgcn"):
         """베이스라인 모델 학습"""
