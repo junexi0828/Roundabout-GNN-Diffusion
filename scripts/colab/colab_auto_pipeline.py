@@ -208,11 +208,13 @@ class ColabAutoPipeline:
 
         # 여러 가능한 경로 확인
         possible_paths = [
+            self.project_root / "data" / "sdd" / "converted",  # 이미 전처리된 데이터
+            self.project_root / "data" / "sdd" / "deathCircle",  # 원본 데이터
+            Path("/content/Roundabout-GNN-Diffusion/data/sdd/converted"),
+            Path("/content/Roundabout_AI/data/sdd/converted"),
             self.data_dir,
             self.drive_root / "Roundabout_AI_Data",
             self.drive_root / "Roundabout_AI" / "data" / "sdd",
-            self.project_root / "data" / "sdd" / "converted",
-            self.project_root / "data" / "sdd" / "deathCircle",
         ]
 
         data_path = None
@@ -262,6 +264,40 @@ class ColabAutoPipeline:
     def preprocess_data(self, data_path: str):
         """5. 데이터 전처리"""
         print("\n[데이터 전처리]")
+        
+        data_path_obj = Path(data_path)
+        
+        # 이미 전처리된 데이터가 있는지 확인
+        processed_dir = self.project_root / "data" / "processed"
+        if processed_dir.exists():
+            pkl_files = list(processed_dir.glob("*.pkl"))
+            if pkl_files:
+                print(f"✓ 이미 전처리된 데이터 발견: {processed_dir}")
+                print(f"  파일: {len(pkl_files)}개")
+                return str(processed_dir)
+        
+        # converted 데이터가 있으면 이미 전처리된 것으로 간주
+        if "converted" in str(data_path_obj):
+            print(f"✓ 변환된 데이터 사용: {data_path_obj}")
+            # 윈도우 생성만 수행
+            try:
+                from src.integration.sdd_data_adapter import SDDDataAdapter
+                adapter = SDDDataAdapter()
+                windows = adapter.load_and_preprocess(data_path_obj)
+                
+                output_dir = self.project_root / "data" / "processed"
+                output_dir.mkdir(parents=True, exist_ok=True)
+                
+                import pickle
+                with open(output_dir / "sdd_windows.pkl", "wb") as f:
+                    pickle.dump(windows, f)
+                
+                print(f"✓ 윈도우 생성 완료: {len(windows)}개")
+                return str(output_dir)
+            except Exception as e:
+                print(f"⚠️  윈도우 생성 실패: {e}")
+                print("  변환된 CSV 파일 직접 사용")
+                return data_path
 
         # 전처리 스크립트 실행
         preprocess_script = self.project_root / "scripts" / "data" / "preprocess_sdd.py"
@@ -276,7 +312,6 @@ class ColabAutoPipeline:
 
                 # 데이터 로드 및 전처리
                 adapter = SDDDataAdapter()
-                data_path_obj = Path(data_path) if data_path else None
                 windows = adapter.load_and_preprocess(data_path_obj)
 
                 # 저장
