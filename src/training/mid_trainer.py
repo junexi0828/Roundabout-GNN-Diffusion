@@ -154,8 +154,9 @@ class MIDTrainer:
                     if future_data is not None:
                         # 타임스텝 랜덤 샘플링
                         batch_size = future_data.size(0)
+                        num_steps = self.config.get('num_diffusion_steps', 100)
                         t = torch.randint(
-                            0, self.model.num_diffusion_steps,
+                            0, num_steps,
                             (batch_size,), device=self.device
                         )
 
@@ -207,8 +208,9 @@ class MIDTrainer:
                 if future_data is not None:
                     # 타임스텝 랜덤 샘플링
                     batch_size = future_data.size(0)
+                    num_steps = self.config.get('num_diffusion_steps', 100)
                     t = torch.randint(
-                        0, self.model.num_diffusion_steps,
+                        0, num_steps,
                         (batch_size,), device=self.device
                     )
 
@@ -308,8 +310,9 @@ class MIDTrainer:
                 if future_data is not None:
                     # 타임스텝 랜덤 샘플링
                     batch_size = future_data.size(0)
+                    num_steps = self.config.get('num_diffusion_steps', 100)
                     t = torch.randint(
-                        0, self.model.num_diffusion_steps,
+                        0, num_steps,
                         (batch_size,), device=self.device
                     )
 
