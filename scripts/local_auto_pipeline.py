@@ -337,8 +337,73 @@ class LocalAutoPipeline:
             print("\n⚠️  학습 중 오류 발생")
             return False
 
+    def evaluate_model(self, data_dir: str):
+        """5. 모델 평가"""
+        print("\n[모델 평가]")
+        
+        checkpoint_path = self.project_root / "checkpoints" / "mid" / "best_model.pth"
+        if not checkpoint_path.exists():
+            print(f"⚠️  체크포인트 없음: {checkpoint_path}")
+            print("평가를 건너뜁니다.")
+            return False
+        
+        eval_script = self.project_root / "scripts" / "evaluation" / "evaluate_mid.py"
+        if not eval_script.exists():
+            print(f"⚠️  평가 스크립트 없음: {eval_script}")
+            return False
+        
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(eval_script),
+                "--checkpoint", str(checkpoint_path),
+                "--data_dir", data_dir,
+                "--output_dir", str(self.results_dir / "metrics"),
+            ],
+            cwd=self.project_root,
+        )
+        
+        if result.returncode == 0:
+            print("✓ 평가 완료")
+            return True
+        else:
+            print("⚠️  평가 중 오류 발생")
+            return False
+
+    def compare_baselines(self):
+        """6. 베이스라인 비교"""
+        print("\n[베이스라인 비교]")
+        
+        compare_script = self.project_root / "scripts" / "evaluation" / "compare_baselines.py"
+        if not compare_script.exists():
+            print(f"⚠️  비교 스크립트 없음: {compare_script}")
+            return False
+        
+        # MID 체크포인트 확인
+        mid_checkpoint = self.project_root / "checkpoints" / "mid" / "best_model.pth"
+        if not mid_checkpoint.exists():
+            print("⚠️  MID 체크포인트 없음. 비교를 건너뜁니다.")
+            return False
+        
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(compare_script),
+                "--mid_checkpoint", str(mid_checkpoint),
+                "--output_dir", str(self.results_dir / "analysis"),
+            ],
+            cwd=self.project_root,
+        )
+        
+        if result.returncode == 0:
+            print("✓ 베이스라인 비교 완료")
+            return True
+        else:
+            print("⚠️  베이스라인 비교 중 오류 발생")
+            return False
+
     def visualize_results(self):
-        """5. 결과 시각화"""
+        """7. 결과 시각화"""
         print("\n[결과 시각화]")
 
         # 기본 시각화 스크립트 실행
@@ -419,7 +484,7 @@ class LocalAutoPipeline:
         try:
             success = self.step(
                 4,
-                5,
+                7,
                 "MID 모델 학습",
                 lambda: self.train_model(processed_dir),
             )
@@ -430,9 +495,22 @@ class LocalAutoPipeline:
             print(f"MID 모델 학습 실패: {e}")
             return False
 
-        # 5. 결과 시각화
+        # 5. 모델 평가
         try:
-            self.step(5, 5, "결과 시각화", self.visualize_results)
+            self.step(5, 7, "모델 평가", lambda: self.evaluate_model(processed_dir))
+        except Exception as e:
+            print(f"평가 실패: {e}")
+
+        # 6. 베이스라인 비교 (선택적)
+        if self.mode != "ultra_fast":
+            try:
+                self.step(6, 7, "베이스라인 비교", self.compare_baselines)
+            except Exception as e:
+                print(f"베이스라인 비교 실패: {e}")
+
+        # 7. 결과 시각화
+        try:
+            self.step(7, 7, "결과 시각화", self.visualize_results)
         except Exception as e:
             print(f"시각화 실패: {e}")
 

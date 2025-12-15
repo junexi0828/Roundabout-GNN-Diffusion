@@ -657,8 +657,41 @@ class ColabAutoPipeline:
 
         return result.returncode == 0
 
+    def evaluate_model(self, data_dir: str):
+        """7. 모델 평가"""
+        print("\n[모델 평가]")
+        
+        checkpoint_path = self.project_root / "checkpoints" / "mid" / "best_model.pth"
+        if not checkpoint_path.exists():
+            print(f"⚠️  체크포인트 없음: {checkpoint_path}")
+            print("평가를 건너뜁니다.")
+            return False
+        
+        eval_script = self.project_root / "scripts" / "evaluation" / "evaluate_mid.py"
+        if not eval_script.exists():
+            print(f"⚠️  평가 스크립트 없음: {eval_script}")
+            return False
+        
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(eval_script),
+                "--checkpoint", str(checkpoint_path),
+                "--data_dir", data_dir,
+                "--output_dir", str(self.project_root / "results" / "metrics"),
+            ],
+            cwd=self.project_root,
+        )
+        
+        if result.returncode == 0:
+            print("✓ 평가 완료")
+            return True
+        else:
+            print("⚠️  평가 중 오류 발생")
+            return False
+
     def compare_baselines(self):
-        """베이스라인 비교 평가"""
+        """8. 베이스라인 비교 평가"""
         print("\n[베이스라인 비교 평가]")
 
         # 비교 평가 스크립트 실행
@@ -710,7 +743,7 @@ class ColabAutoPipeline:
             print("⚠️  비교 평가 중 오류 발생")
 
     def visualize_results(self):
-        """8. 결과 시각화"""
+        """9. 결과 시각화"""
         print("\n[결과 시각화]")
 
         # 기본 시각화 스크립트 실행
@@ -745,7 +778,7 @@ class ColabAutoPipeline:
             print("⚠️  종합 분석 스크립트 없음")
 
     def save_results(self):
-        """9. 결과 저장 (Google Drive)"""
+        """10. 결과 저장 (Google Drive)"""
         if not self.drive_mount:
             print("⚠️  Google Drive 마운트 안 됨, 로컬에만 저장")
             return
@@ -889,7 +922,7 @@ class ColabAutoPipeline:
         try:
             success = self.step(
                 6,
-                8,
+                10,
                 "MID 모델 학습 (HSG-Diffusion)",
                 lambda: self.train_model(processed_dir),
             )
@@ -900,15 +933,28 @@ class ColabAutoPipeline:
             print(f"MID 모델 학습 실패: {e}")
             return False
 
-        # 7. 결과 시각화
+        # 7. 모델 평가
         try:
-            self.step(7, 8, "결과 시각화", self.visualize_results)
+            self.step(7, 10, "모델 평가", lambda: self.evaluate_model(processed_dir))
+        except Exception as e:
+            print(f"평가 실패: {e}")
+
+        # 8. 베이스라인 비교 (선택적)
+        if self.mode != "ultra_fast":
+            try:
+                self.step(8, 10, "베이스라인 비교", self.compare_baselines)
+            except Exception as e:
+                print(f"베이스라인 비교 실패: {e}")
+
+        # 9. 결과 시각화
+        try:
+            self.step(9, 10, "결과 시각화", self.visualize_results)
         except Exception as e:
             print(f"시각화 실패: {e}")
 
-        # 8. 결과 저장
+        # 10. 결과 저장
         try:
-            self.step(8, 8, "결과 저장 (Drive)", self.save_results)
+            self.step(10, 10, "결과 저장 (Drive)", self.save_results)
         except Exception as e:
             print(f"결과 저장 실패: {e}")
 
